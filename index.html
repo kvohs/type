@@ -94,6 +94,12 @@
     transition: background-color .35s ease, color .35s ease;
   }
 
+  /* a whisper of vignette on every theme — a little focus, a little age (sits behind the text) */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(118% 96% at 50% 44%, rgba(0,0,0,0) 56%, rgba(0,0,0,.055) 100%);
+  }
+
   .stage {
     position: relative;
     width: 100%; height: 100%;

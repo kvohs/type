@@ -1088,18 +1088,17 @@
   // roll up above it and fade under the veil.
   function layout() {
     const lh = LINE_H_PX();
+    // the page stays put — overstriking moves only the block cursor across the
+    // committed lines that are already visible, never the page itself
     let offset = 0;
-    let focusIdx = locked.length;                   // normally pin the strike point at center
-    if (cursor) {
-      focusIdx = cursor.line;                       // overstriking: center the committed line under the cursor
-    } else if (quoteHold) {
+    if (quoteHold) {
       const d = locked.length - quoteHold.floor;    // lines you've committed since the quote
       const H = QUOTE_HOLD_ROWS;
       if (d <= H) offset = d;                       // hold: quote frozen, cursor descends
       else if (d <= 2 * H) offset = 2 * H - d;      // catch up: roll back to the strike point
       else { offset = 0; quoteHold = null; }        // done — ordinary centered writing
     }
-    feed.style.transform = `translateY(${-(focusIdx - offset) * lh}px)`;
+    feed.style.transform = `translateY(${-(locked.length - offset) * lh}px)`;
     positionQuoteX();
   }
 

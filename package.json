@@ -1,0 +1,39 @@
+{
+  "name": "type",
+  "productName": "type",
+  "version": "1.0.0",
+  "description": "A single sheet of paper. Type, then keep it or burn it.",
+  "main": "main.js",
+  "author": "Kelly Vohs",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.kellyvohs.type",
+    "productName": "type",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "quotes.js"
+    ],
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": "universal" }
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "identity": null
+    },
+    "dmg": {
+      "title": "type"
+    }
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  }
+}

@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>type</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper: #ffffff;
+    --ink: #121316;
+    --ink-soft: #2c2d32;
+    --ink-quiet: #7c7f86;
+    --ink-faint: #c2c4c9;
+    --rule: #e5e6e9;
+    --panel: #ffffff;
+    --panel-shadow: rgba(40,36,30,.4);
+    --sw-off: #e0e1e4;
+    --emboss: rgba(255,255,255,.8);
+    --ember: #b05f4a;
+    --accent: #df5a26;
+    --line-h: 2.05em;
+    --type-size: 18px;
+    --line-px: calc(var(--type-size) * 2.05);   /* fixed row height so smaller lines still occupy one row */
+    --mono: "Courier Prime", "Courier New", ui-monospace, monospace;
+  }
+
+  body.dark {
+    --paper: #141519;        /* coop brand dark — a soft near-black, not true black */
+    --ink: #e7e8ea;
+    --ink-soft: #c4c6cb;
+    --ink-quiet: #888b92;
+    --ink-faint: #3f424a;
+    --rule: #2a2c32;
+    --panel: #1c1e23;
+    --panel-shadow: rgba(0,0,0,.6);
+    --sw-off: #3a3d44;
+    --emboss: rgba(0,0,0,.45);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--paper);
+    color: var(--ink);
+    cursor: default;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    transition: background-color .35s ease, color .35s ease;
+  }
+
+  .stage {
+    position: relative;
+    width: 100%; height: 100%;
+  }
+
+  /* ---------- typing window ---------- */
+  .platen {
+    position: absolute; inset: 0;
+    overflow: hidden;
+    /* the active line sits at the vertical middle; everything above it fades up
+       under a soft veil (the locked, uneditable past) */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 3%, #000 48%, #000 100%);
+            mask-image: linear-gradient(to bottom, transparent 3%, #000 48%, #000 100%);
+  }
+
+  .feed {
+    position: absolute;
+    top: calc(50% - 1.02em);        /* strike point — active line's center sits on the screen middle */
+    left: 50%;                      /* centered column — typing lives in the middle of the screen */
+    transform: translateX(-50%);
+    width: min(64ch, 84vw);         /* caps at the measure on big screens; uses most of a small one */
+    font-family: var(--mono);
+    font-size: var(--type-size);
+    line-height: var(--line-px);
+    color: var(--ink);
+  }
+  .feed-inner {
+    transition: transform .15s cubic-bezier(.22,.61,.25,1);
+    will-change: transform;
+  }
+  .feed-inner.eject { transition: transform .62s cubic-bezier(.5,0,.75,0) !important; }
+
+  .line {
+    min-height: var(--line-h);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .line.intro-line { white-space: nowrap; }
+  .line.attrib { font-size: 12px; letter-spacing: .04em; color: var(--ink-faint); }
+  .line.cr { animation: carriage .24s cubic-bezier(.2,.8,.3,1); }
+  @keyframes carriage {
+    0%   { transform: translateX(-11px); }
+    65%  { transform: translateX(1.5px); }
+    100% { transform: translateX(0); }
+  }
+
+  .ch { display: inline-block; }
+
+  /* blinking bar cursor — rests (solid) while typing */
+  .caret {
+    display: inline-block;
+    width: 2px; height: 1.08em;
+    margin-left: 2px;
+    vertical-align: -0.16em;
+    background: var(--ink);
+    animation: blink 780ms steps(1, end) infinite;
+  }
+  @keyframes blink { 0%,49% { opacity: .9; } 50%,100% { opacity: 0; } }
+  .stage.typing .caret { animation: none; opacity: .9; }
+
+  /* ---------- intro ---------- */
+  .intro {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    display: grid; grid-auto-flow: column; align-items: center;
+    font-family: var(--mono);
+    font-size: var(--type-size);
+    color: var(--ink);
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  .intro.leaving { opacity: 0; transform: translate(-50%, -58%); }
+  .period { color: var(--accent); }
+
+  /* ---------- shortcuts ---------- */
+  .hints {
+    position: fixed;
+    bottom: 30px; left: 0; right: 0;
+    display: flex; justify-content: center; align-items: center;
+    gap: 26px;
+    font-family: var(--mono);
+    z-index: 10;
+    transition: opacity .7s ease;
+    user-select: none;
+  }
+  .hints.dim { opacity: 0; pointer-events: none; }
+  .hint { display: inline-flex; align-items: baseline; gap: 9px; }
+  .hint .k { font-weight: 700; font-size: 11px; letter-spacing: .22em; color: var(--ink-quiet); }
+  .hint .l { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-faint); }
+  .hint-btn { cursor: pointer; }
+  .hint-btn:hover .k, .hint-btn:hover .l { color: var(--ink); }
+  .sep { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-faint); opacity: .7; }
+
+  /* ---------- save: date stamp ---------- */
+  .stamp {
+    position: absolute; left: 50%; top: 46%;
+    transform: translate(-50%,-50%);
+    text-align: center; opacity: 0; pointer-events: none; z-index: 8;
+  }
+  .stamp.show { animation: stampSeq 2.0s ease forwards; }
+  @keyframes stampSeq {
+    0%   { opacity: 0; transform: translate(-50%,-50%) scale(1.14); }
+    13%  { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    68%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%,-50%) scale(1); }
+  }
+  .stamp .date {
+    font-family: var(--mono); font-weight: 700;
+    font-size: 15px; letter-spacing: .34em; text-indent: .34em;
+    color: var(--ink);
+    text-shadow: 0 1px 0 var(--emboss), 0 -1px 1px rgba(0,0,0,.12);
+  }
+  .stamp .kept {
+    margin-top: 15px;
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: .24em; text-transform: uppercase; color: var(--ink-faint);
+  }
+
+  /* ---------- burn ---------- */
+  .ash {
+    animation: burn-char 1100ms ease-in forwards;
+    animation-delay: var(--delay, 0ms);
+    transform-origin: 50% 70%;
+    will-change: color, filter, opacity, transform;
+  }
+  @keyframes burn-char {
+    0%   { color: var(--ink); filter: blur(0); opacity: 1; text-shadow: none; transform: translate(0,0) rotate(0deg); }
+    26%  { color: var(--ember); filter: blur(0); opacity: 1; text-shadow: 0 0 9px rgba(176,95,74,.5); }
+    100% { color: rgba(18,19,22,0); filter: blur(1.8px); opacity: 0; transform: translate(var(--x), var(--y)) rotate(var(--r)); }
+  }
+  .ember {
+    position: absolute; width: 3px; height: 3px; border-radius: 999px;
+    background: var(--ember); box-shadow: 0 0 12px rgba(176,95,74,.65);
+    opacity: 0; z-index: 6; pointer-events: none;
+    animation: ember 850ms ease-out forwards;
+  }
+  @keyframes ember {
+    0%   { opacity: 0; transform: translate(0, 12px) scale(.4); }
+    20%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(.1); }
+  }
+  .smoke {
+    position: absolute; width: 180px; height: 180px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(120,120,128,.16), rgba(120,120,128,0) 68%);
+    filter: blur(15px); opacity: 0; pointer-events: none; z-index: 5;
+  }
+  .smoke.go { animation: smokeRise 1.9s ease-out forwards; }
+  @keyframes smokeRise {
+    0%   { opacity: 0; transform: translateY(12px) scale(.55); }
+    28%  { opacity: .85; }
+    100% { opacity: 0; transform: translateY(-130px) scale(1.6); }
+  }
+
+  /* ---------- settings panel ---------- */
+  .settings {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 64px; z-index: 12;
+    width: 248px; padding: 14px 16px 10px;
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 12px;
+    box-shadow: 0 12px 34px -14px var(--panel-shadow);
+    font-family: var(--mono);
+  }
+  .settings[hidden] { display: none; }
+  .settings-title {
+    font-size: 10px; letter-spacing: .24em; text-transform: uppercase;
+    color: var(--ink-faint); margin-bottom: 10px;
+  }
+  .setrow {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; font-size: 12.5px; color: var(--ink-soft);
+    cursor: pointer; user-select: none;
+  }
+  .setrow input { position: absolute; opacity: 0; pointer-events: none; }
+  .setrow .sw {
+    position: relative; width: 34px; height: 18px; border-radius: 999px;
+    background: var(--sw-off); transition: background .2s ease; flex: none;
+  }
+  .setrow .sw::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .2s ease;
+  }
+  .setrow input:checked ~ .sw { background: var(--accent); }
+  .setrow input:checked ~ .sw::after { transform: translateX(16px); }
+  .setdiv { height: 1px; background: var(--rule); margin: 6px 0; }
+  .setrow-btn { cursor: pointer; gap: 12px; }
+  .setrow-btn[hidden] { display: none; }
+  .setval {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; color: var(--ink-soft, #2c2d32);
+  }
+  .setpick {
+    flex: none; font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="platen">
+      <div class="feed"><div class="feed-inner" id="feed"></div></div>
+    </div>
+    <div class="intro" id="intro"></div>
+    <div class="stamp" id="stamp"><div class="date" id="stampDate"></div><div class="kept" id="stampKept"></div></div>
+  </div>
+
+  <div class="hints dim" id="hints">
+    <span class="hint"><span class="k">&#8984;S</span><span class="l">keep</span></span>
+    <span class="sep"></span>
+    <span class="hint"><span class="k">&#8984;&#9003;</span><span class="l">burn</span></span>
+    <span class="sep"></span>
+    <span class="hint hint-btn" id="hintSettings"><span class="k">&#8984;,</span><span class="l">settings</span></span>
+  </div>
+
+  <div class="settings" id="settings" hidden>
+    <div class="settings-title">settings</div>
+    <label class="setrow"><span>Dark mode</span><input type="checkbox" id="setDark" /><span class="sw"></span></label>
+    <div class="setdiv"></div>
+    <label class="setrow"><span>Sound</span><input type="checkbox" id="setSound" /><span class="sw"></span></label>
+    <div class="setdiv"></div>
+    <label class="setrow"><span>Keystroke click</span><input type="checkbox" id="setClicks" /><span class="sw"></span></label>
+    <label class="setrow"><span>Carriage return</span><input type="checkbox" id="setCarriage" /><span class="sw"></span></label>
+    <label class="setrow"><span>Margin bell</span><input type="checkbox" id="setBell" /><span class="sw"></span></label>
+    <div class="setdiv"></div>
+    <div class="settings-title">quotes</div>
+    <label class="setrow"><span>On startup</span><input type="checkbox" id="setQuoteStartup" /><span class="sw"></span></label>
+    <label class="setrow"><span>On burn</span><input type="checkbox" id="setQuoteBurn" /><span class="sw"></span></label>
+    <div class="setdiv" id="saveDiv" hidden></div>
+    <div class="settings-title" id="saveTitle" hidden>save as .md to</div>
+    <div class="setrow setrow-btn" id="rowSaveFolder" hidden>
+      <span class="setval" id="saveFolderLabel">Downloads</span>
+      <span class="setpick">choose…</span>
+    </div>
+  </div>
+
+<script src="quotes.js"></script>
+<script>
+(() => {
+  const feed    = document.getElementById('feed');
+  const stage   = document.getElementById('stage');
+  const introEl = document.getElementById('intro');
+  const hints   = document.getElementById('hints');
+  const stampEl = document.getElementById('stamp');
+  const stampDate = document.getElementById('stampDate');
+  const stampKept = document.getElementById('stampKept');
+  const hintSettings = document.getElementById('hintSettings');
+  const settingsEl = document.getElementById('settings');
+
+  /* ================= SETTINGS ================= */
+  const DEFAULTS = { dark: false, sound: true, clicks: true, carriage: true, bell: true, quoteStartup: false, quoteBurn: false, saveDir: '' };
+  let settings = Object.assign({}, DEFAULTS);
+  try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
+  const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
+  const applyTheme = () => { document.body.classList.toggle('dark', !!settings.dark); };
+  const boxes = { dark: document.getElementById('setDark'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteStartup: document.getElementById('setQuoteStartup'), quoteBurn: document.getElementById('setQuoteBurn') };
+  Object.keys(boxes).forEach(k => {
+    boxes[k].checked = !!settings[k];
+    boxes[k].addEventListener('change', () => { settings[k] = boxes[k].checked; saveSettings(); if (k === 'dark') applyTheme(); });
+  });
+  applyTheme();
+  const toggleSettings = () => { settingsEl.hidden = !settingsEl.hidden; if (!settingsEl.hidden) hints.classList.remove('dim'); };
+  hintSettings.addEventListener('click', toggleSettings);
+  document.addEventListener('mousedown', (e) => {
+    if (!settingsEl.hidden && !settingsEl.contains(e.target) && !hintSettings.contains(e.target)) settingsEl.hidden = true;
+  });
+
+  // save-folder picker — only available in the desktop app
+  const desktop = !!(window.typeAPI && window.typeAPI.isDesktop);
+  const rowSaveFolder = document.getElementById('rowSaveFolder');
+  const saveFolderLabel = document.getElementById('saveFolderLabel');
+  function folderName(p) { return p ? p.split('/').filter(Boolean).pop() : 'Downloads'; }
+  if (desktop) {
+    document.getElementById('saveDiv').hidden = false;
+    document.getElementById('saveTitle').hidden = false;
+    rowSaveFolder.hidden = false;
+    saveFolderLabel.textContent = folderName(settings.saveDir);
+    rowSaveFolder.addEventListener('click', async () => {
+      const dir = await window.typeAPI.pickFolder();
+      if (dir) { settings.saveDir = dir; saveSettings(); saveFolderLabel.textContent = folderName(dir); }
+    });
+  }
+
+  // line width adapts to the window — no fixed character count, no minimum screen size
+  let MAX_COLS = 62;
+  let BELL_AT  = 56;
+  const LINE_H_PX = () => parseFloat(getComputedStyle(feed).lineHeight);
+  function computeCols() {
+    const w = feed.parentElement.getBoundingClientRect().width;
+    const fs = parseFloat(getComputedStyle(feed).fontSize) || 18;
+    const charW = 0.6 * fs;                     // Courier advance width
+    MAX_COLS = Math.max(16, Math.floor(w / charW) - 1);
+    BELL_AT  = Math.max(8, MAX_COLS - 6);
+  }
+
+  let locked = [];
+  let current = '';
+  let activeEl = null;
+  let phase = 'intro';
+  let frozen = false;
+  let idleTimer = null;
+  let typeRestTimer = null;
+  let introTimers = [];
+  let bellRung = false;
+
+  /* ================= SOUND ================= */
+  let actx = null;
+  const AC = () => {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  };
+  function noise(dur) {
+    const ctx = AC();
+    const buf = ctx.createBuffer(1, Math.max(1, ctx.sampleRate * dur), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    return buf;
+  }
+  function burst(dur, shape) {
+    const ctx = AC();
+    const buf = ctx.createBuffer(1, Math.max(1, ctx.sampleRate * dur), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, shape);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    return src;
+  }
+  function thock() {
+    if (!settings.sound) return;
+    if (!settings.clicks) return;
+    const ctx = AC(), t = ctx.currentTime;
+    // a dry, soft key click — broadband noise, no pitch, no resonance, no drummy body.
+    // (tuned/resonant content is what turns into machine-gun or bongo when typing fast)
+    const v = 0.15 + Math.random() * 0.05;            // clearly audible, slight per-press variation
+    const nd = 0.02 + Math.random() * 0.006;
+    const src = burst(nd, 2.8);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1500 + Math.random() * 1300; bp.Q.value = 0.6;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500;  // strip drummy body, keep presence
+    const g = ctx.createGain(); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + nd);
+    src.connect(bp); bp.connect(hp); hp.connect(g); g.connect(ctx.destination);
+    src.start(t); src.stop(t + nd);
+  }
+  function bell(vol) {
+    if (!settings.sound) return;
+    const ctx = AC(), t = ctx.currentTime; vol = vol || 0.11;
+    [1046, 1568, 2349].forEach((f, i) => {
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = ctx.createGain(); const v = vol * (i === 0 ? 1 : 0.45 / i);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.55);
+    });
+  }
+  function zip(vol, dur) {
+    if (!settings.sound) return;
+    const ctx = AC(), t = ctx.currentTime; dur = dur || 0.14; vol = vol || 0.11;
+    const src = ctx.createBufferSource(); src.buffer = noise(dur);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(2600, t); bp.frequency.exponentialRampToValueAtTime(700, t + dur);
+    const g = ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp).connect(g).connect(ctx.destination); src.start(t); src.stop(t + dur);
+  }
+  function carriageReturn() {
+    if (!settings.sound || !settings.carriage) return;
+    const ctx = AC(), t = ctx.currentTime;
+    // 1) the travel — a soft airy swish (broadband lowpass noise, no resonant whistle)
+    const sd = 0.12;
+    const src = burst(sd, 0.5);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3400, t); lp.frequency.exponentialRampToValueAtTime(820, t + sd);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.045, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + sd);
+    src.connect(lp).connect(g).connect(ctx.destination); src.start(t); src.stop(t + sd);
+    // 2) the seat — a woody chunk as the carriage hits the margin stop
+    const tt = t + 0.10;
+    const nb = burst(0.05, 2);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 250; bp.Q.value = 1.3;
+    const ng = ctx.createGain(); ng.gain.setValueAtTime(0.13, tt); ng.gain.exponentialRampToValueAtTime(0.0001, tt + 0.05);
+    nb.connect(bp).connect(ng).connect(ctx.destination); nb.start(tt); nb.stop(tt + 0.05);
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(150, tt); o.frequency.exponentialRampToValueAtTime(64, tt + 0.06);
+    const og = ctx.createGain(); og.gain.setValueAtTime(0.10, tt); og.gain.exponentialRampToValueAtTime(0.0001, tt + 0.07);
+    o.connect(og).connect(ctx.destination); o.start(tt); o.stop(tt + 0.08);
+  }
+  function whoosh() {
+    if (!settings.sound) return;
+    const ctx = AC(), t = ctx.currentTime, dur = 0.55;
+    const src = ctx.createBufferSource(); src.buffer = noise(dur);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(220, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.09, t + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(lp).connect(g).connect(ctx.destination); src.start(t); src.stop(t + dur);
+  }
+  function setSound(on) {
+    settings.sound = on;
+    boxes.sound.checked = on;
+    saveSettings();
+    if (on) { AC(); bell(0.07); }
+  }
+
+  // Safari/iOS won't make sound until the audio context is unlocked inside a real gesture
+  let audioReady = false;
+  function unlockAudio() {
+    if (audioReady) return;
+    audioReady = true;
+    const ctx = AC();
+    const b = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0);
+  }
+
+  /* ================= RENDER ================= */
+  function inkSpan(c) {
+    const s = document.createElement('span');
+    s.className = 'ch';
+    s.textContent = c === ' ' ? ' ' : c;
+    return s;
+  }
+  function caretEl() {
+    const c = document.createElement('span');
+    c.className = 'caret';
+    return c;
+  }
+
+  function markTyping() {
+    stage.classList.add('typing');
+    clearTimeout(typeRestTimer);
+    typeRestTimer = setTimeout(() => stage.classList.remove('typing'), 650);
+  }
+
+  /* ================= INTRO ================= */
+  // Happens in the writing line, centered on the screen: types "type" + a burnt-
+  // orange period, blinks a couple times, then backspaces and the cursor slides
+  // all the way to the left margin, where typing begins. Starts immediately.
+  let introPlayed = false;
+
+  function centerIntroLine() {
+    const charW = 0.6 * parseFloat(getComputedStyle(feed).fontSize); // Courier advance
+    const wordW = 5 * charW;                                          // "type."
+    const centerX = window.innerWidth / 2;
+    const leftEdge = feed.parentElement.getBoundingClientRect().left;
+    activeEl.style.transform = `translateX(${Math.max(0, (centerX - wordW / 2) - leftEdge)}px)`;
+  }
+
+  function runIntro() {
+    introEl.style.display = 'none';
+    activeEl = document.createElement('div');
+    activeEl.className = 'line intro-line';
+    feed.appendChild(activeEl);
+    activeEl.appendChild(caretEl());
+    layout();
+    centerIntroLine();
+    introTimers.push(setTimeout(playIntro, 500));   // ~0.5s of blink before it types
+  }
+
+  function playIntro() {
+    if (introPlayed || phase !== 'intro') return;
+    introPlayed = true;
+    introTimers.forEach(clearTimeout); introTimers = [];
+    const caret = activeEl.querySelector('.caret');
+    let t = 0;
+    // type t-y-p-e (centered)
+    for (const ch of 'type') {
+      const c = ch;
+      introTimers.push(setTimeout(() => { activeEl.insertBefore(inkSpan(c), caret); thock(); }, t));
+      t += 135;
+    }
+    // the burnt-orange period
+    introTimers.push(setTimeout(() => {
+      const p = document.createElement('span'); p.className = 'ch period'; p.textContent = '.';
+      activeEl.insertBefore(p, caret); thock();
+    }, t));
+    t += 1000;   // a second to sit after
+    // backspace it away
+    for (let k = 0; k < 5; k++) {
+      introTimers.push(setTimeout(() => {
+        const chars = activeEl.querySelectorAll('.ch');
+        if (chars.length) chars[chars.length - 1].remove();
+        thock();
+      }, t));
+      t += 110;
+    }
+    // slide the cursor all the way to the left-hand side
+    introTimers.push(setTimeout(() => {
+      activeEl.style.transition = 'transform .5s cubic-bezier(.4,0,.2,1)';
+      activeEl.style.transform = 'translateX(0)';
+    }, t));
+    t += 540;
+    // stay at the left, ready to type
+    introTimers.push(setTimeout(() => {
+      if (phase !== 'intro') return;
+      activeEl.style.transition = '';
+      activeEl.classList.remove('intro-line');
+      phase = 'writing';
+      hints.classList.remove('dim');     // idle at the start → controls visible
+      if (settings.quoteStartup) introTimers.push(setTimeout(seedQuote, 320));
+    }, t));
+  }
+
+  /* ================= QUOTE ================= */
+  // The quote is typed into the page as real text (silently), then it rolls up
+  // and stays — exactly like the lines you type. You just keep writing beneath it.
+  let quotePlaying = false;
+  let quoteSkip = null;
+
+  function wrapText(text, cols) {
+    const out = [];
+    let line = '';
+    for (let word of text.split(/\s+/)) {
+      while (word.length > cols) { if (line) { out.push(line); line = ''; } out.push(word.slice(0, cols)); word = word.slice(cols); }
+      if (!line) line = word;
+      else if ((line + ' ' + word).length <= cols) line += ' ' + word;
+      else { out.push(line); line = word; }
+    }
+    if (line) out.push(line);
+    return out;
+  }
+
+  function quoteCommitSilent(cls) {           // commit the active line with no sound, no slide
+    if (activeEl) {
+      activeEl.classList.remove('cr');
+      if (cls) activeEl.classList.add(cls);
+      activeEl.textContent = '';
+      for (const c of current) activeEl.appendChild(inkSpan(c));
+    }
+    locked.push(current);
+    current = '';
+    activeEl = null;
+    bellRung = false;
+    renderActive();
+    layout();
+  }
+
+  function seedQuote() {
+    const list = window.TYPE_QUOTES;
+    if (!list || !list.length || phase !== 'writing' || quotePlaying) return;
+    const q = list[Math.floor(Math.random() * list.length)];
+    const bodyLines = wrapText(q.text, MAX_COLS);          // typed out, full size
+    const attribLines = wrapText('— ' + (q.author || 'Unknown'), MAX_COLS);  // author only
+    quotePlaying = true;
+    let timers = [];
+    let nextLine = 0;
+
+    // the author is a quiet caption, not typed — it just settles in under the quote
+    const placeAttributionAndEnd = () => {
+      timers.forEach(clearTimeout); timers = [];
+      quoteCommitSilent();                    // gap between quote and author
+      for (const a of attribLines) { current = a; quoteCommitSilent('attrib'); }
+      quoteCommitSilent();                    // gap, then you write on a fresh line
+      quotePlaying = false; quoteSkip = null;
+    };
+
+    const typeLine = (idx) => {
+      if (idx >= bodyLines.length) { placeAttributionAndEnd(); return; }
+      nextLine = idx;
+      current = '';
+      let t = 0;
+      for (const ch of bodyLines[idx]) { const c = ch; timers.push(setTimeout(() => { current += c; renderActive(); }, t)); t += 20; }
+      timers.push(setTimeout(() => { quoteCommitSilent(); typeLine(idx + 1); }, t + 55));
+    };
+
+    quoteSkip = () => {                        // a keystroke finishes the quote instantly
+      timers.forEach(clearTimeout); timers = [];
+      for (let i = nextLine; i < bodyLines.length; i++) { current = bodyLines[i]; quoteCommitSilent(); }
+      placeAttributionAndEnd();
+    };
+
+    typeLine(0);
+  }
+
+  function skipIntro() {
+    introTimers.forEach(clearTimeout); introTimers = [];
+    if (activeEl) {
+      activeEl.style.transition = ''; activeEl.style.transform = 'translateX(0)';
+      activeEl.classList.remove('intro-line');
+      activeEl.textContent = ''; activeEl.appendChild(caretEl());
+    }
+    current = '';
+    phase = 'writing';
+    layout();
+    nudgeHints();
+  }
+
+  /* ================= WRITING ================= */
+  function renderActive(cr) {
+    if (!activeEl) {
+      activeEl = document.createElement('div');
+      activeEl.className = 'line';
+      feed.appendChild(activeEl);
+    }
+    if (cr) activeEl.classList.add('cr');
+    activeEl.textContent = '';
+    for (const c of current) activeEl.appendChild(inkSpan(c));
+    activeEl.appendChild(caretEl());
+  }
+
+  // active line is pinned to the strike point (vertical middle); finished lines
+  // roll up above it and fade under the veil.
+  function layout() {
+    feed.style.transform = `translateY(${-locked.length * LINE_H_PX()}px)`;
+  }
+
+  function commitLine() {
+    if (activeEl) {
+      activeEl.classList.remove('cr');
+      activeEl.textContent = '';
+      for (const c of current) activeEl.appendChild(inkSpan(c));
+    }
+    locked.push(current);
+    current = '';
+    activeEl = null;
+    bellRung = false;
+    renderActive(true);     // new line sweeps in (carriage return)
+    layout();
+    carriageReturn();       // swish + seat-chunk back to the margin
+  }
+
+  function newSheet() {
+    locked = []; current = ''; activeEl = null; bellRung = false;
+    feed.innerHTML = '';
+    feed.classList.remove('eject');
+    feed.style.transform = 'translateY(0)';
+    renderActive();
+    layout();
+  }
+
+  function pushChar(c) {
+    // double-space -> period (only after a word, not after punctuation)
+    if (c === ' ' && current.endsWith(' ') && !current.endsWith('  ') &&
+        /[\w)"'\]]/.test(current[current.length - 2] || '')) {
+      current = current.slice(0, -1) + '. ';
+      renderActive();
+      if (!bellRung && current.length >= BELL_AT) { bellRung = true; if (settings.bell) bell(0.09); }
+      return;
+    }
+    if (current.length < MAX_COLS) {
+      current += c;
+      renderActive();
+      if (!bellRung && current.length === BELL_AT) { bellRung = true; if (settings.bell) bell(0.09); }
+      return;
+    }
+    const lastSpace = current.lastIndexOf(' ');
+    if (c !== ' ' && lastSpace > MAX_COLS * 0.5) {
+      const carry = current.slice(lastSpace + 1);
+      current = current.slice(0, lastSpace);
+      commitLine();
+      current = carry + c;
+      renderActive();
+    } else {
+      commitLine();
+      if (c !== ' ') { current = c; renderActive(); }
+    }
+  }
+
+  /* ================= SAVE (eject + stamp) ================= */
+  function save() {
+    if (frozen || phase !== 'writing') return;
+    frozen = true;
+    const body = [...locked, current].join('\n').replace(/\s+$/,'') + '\n';
+    const words = (body.trim().match(/\S+/g) || []).length;
+    const fileStamp = new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
+    const filename = `type-${fileStamp}.md`;
+
+    if (window.typeAPI && window.typeAPI.isDesktop) {
+      // desktop: write a .md file to the chosen folder (or Downloads)
+      window.typeAPI.saveNote({ dir: settings.saveDir || null, content: body, filename });
+    } else {
+      // browser: download a .md file
+      const blob = new Blob([body], { type: 'text/markdown' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    const caret = feed.querySelector('.caret'); if (caret) caret.remove();
+    zip(0.16, 0.42);                            // paper pulled from platen
+    feed.classList.add('eject');
+    requestAnimationFrame(() => { feed.style.transform = 'translateY(-130vh)'; });
+
+    setTimeout(() => {
+      stampDate.textContent = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase().replace(/,/g,'');
+      stampKept.textContent = words === 1 ? '1 word kept' : `${words} words kept`;
+      stampEl.classList.remove('show'); void stampEl.offsetWidth;
+      stampEl.classList.add('show');
+      bell(0.1);
+    }, 520);
+
+    setTimeout(() => { stampEl.classList.remove('show'); newSheet(); frozen = false; }, 2620);
+  }
+
+  /* ================= BURN (ember + smoke + stillness) ================= */
+  function makeEmbers() {
+    for (let i = 0; i < 40; i++) {
+      const e = document.createElement('span');
+      e.className = 'ember';
+      e.style.left = (12 + Math.random() * 64) + '%';
+      e.style.top  = (28 + Math.random() * 34) + '%';
+      e.style.setProperty('--x', (Math.random() * 92 - 46).toFixed(1) + 'px');
+      e.style.setProperty('--y', (-52 - Math.random() * 104).toFixed(1) + 'px');
+      e.style.animationDelay = (Math.random() * 430) + 'ms';
+      stage.appendChild(e);
+      setTimeout(() => e.remove(), 1300);
+    }
+  }
+  function makeSmoke() {
+    for (let i = 0; i < 3; i++) {
+      const s = document.createElement('div');
+      s.className = 'smoke';
+      s.style.left = (26 + Math.random() * 34) + '%';
+      s.style.top  = (30 + Math.random() * 14) + '%';
+      s.style.animationDelay = (i * 230) + 'ms';
+      stage.appendChild(s);
+      requestAnimationFrame(() => s.classList.add('go'));
+      setTimeout(() => s.remove(), 2300);
+    }
+  }
+  function burn() {
+    if (frozen || phase !== 'writing') return;
+    frozen = true;
+    const caret = feed.querySelector('.caret'); if (caret) caret.remove();
+    const chars = [...feed.querySelectorAll('.ch')];
+    chars.forEach((s, i) => {
+      s.classList.add('ash');
+      s.style.setProperty('--delay', Math.min(520, i * 3 + Math.random() * 130) + 'ms');
+      s.style.setProperty('--x', (Math.random() * 44 - 22).toFixed(1) + 'px');
+      s.style.setProperty('--y', (-24 - Math.random() * 54).toFixed(1) + 'px');
+      s.style.setProperty('--r', (Math.random() * 24 - 12).toFixed(1) + 'deg');
+    });
+    whoosh();
+    makeEmbers();
+    setTimeout(makeSmoke, 720);
+    setTimeout(() => {
+      newSheet(); frozen = false;
+      if (settings.quoteBurn) setTimeout(seedQuote, 450);   // a quote types in after the burn, then rolls up as you write
+    }, 2700);  // a held beat before the fresh sheet
+  }
+
+  /* ================= HINTS ================= */
+  // inverted: typing hides the controls (just thoughts); a pause brings them back.
+  function nudgeHints() {
+    if (settingsEl.hidden) hints.classList.add('dim');     // hide while typing
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { if (phase === 'writing') hints.classList.remove('dim'); }, 1300);
+  }
+
+  /* ================= INPUT ================= */
+  const NAV = ['ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Home','End','PageUp','PageDown'];
+
+  window.addEventListener('keydown', (e) => {
+    const mod = e.metaKey || e.ctrlKey;
+    unlockAudio();
+
+    if (e.key === 'Escape') { if (!settingsEl.hidden) { e.preventDefault(); settingsEl.hidden = true; } return; }
+    if (e.ctrlKey && (e.key === 'm' || e.key === 'M')) { e.preventDefault(); setSound(!settings.sound); return; }
+    if (mod && e.key === ',') { e.preventDefault(); toggleSettings(); return; }
+    if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); save(); return; }
+    if (mod && (e.key === 'Backspace' || e.key === 'Delete')) { e.preventDefault(); burn(); return; }
+    if (frozen) return;
+    if (mod) return;
+
+    if (phase === 'intro') {
+      if (!introPlayed) { playIntro(); return; }
+      if (e.key === 'Enter' || e.key === 'Backspace' || e.key.length === 1) skipIntro();
+      else return;
+    }
+
+    if (NAV.includes(e.key)) { e.preventDefault(); return; }
+
+    // a keystroke finishes a quote that's still typing itself in, then you carry on
+    if (quotePlaying && (e.key === 'Enter' || e.key === 'Backspace' || e.key.length === 1)) quoteSkip();
+
+    if (e.key === 'Enter') { e.preventDefault(); commitLine(); markTyping(); nudgeHints(); return; }
+
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      if (current.length > 0) { current = current.slice(0, -1); renderActive(); thock(); }
+      markTyping(); nudgeHints();
+      return;
+    }
+
+    if (e.key.length === 1) {
+      e.preventDefault();
+      pushChar(e.key);
+      thock();
+      markTyping();
+      nudgeHints();
+    }
+  });
+
+  window.addEventListener('mousedown', (e) => {
+    unlockAudio();
+    if (hintSettings.contains(e.target) || settingsEl.contains(e.target)) return;   // don't let settings clicks skip the intro
+    if (phase === 'intro') { if (!introPlayed) playIntro(); else skipIntro(); }
+  });
+  window.addEventListener('resize', () => { computeCols(); layout(); });
+
+  computeCols();
+  runIntro();
+})();
+</script>
+</body>
+</html>

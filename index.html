@@ -132,7 +132,7 @@
   }
   .feed-inner.eject { transition: transform .62s cubic-bezier(.5,0,.75,0) !important; }
   /* a frozen copy of the welcome that fades in place while the quote types in fresh */
-  .feed-inner.ghost { position: absolute; left: 0; right: 0; top: 0; transition: opacity .8s ease; pointer-events: none; }
+  .feed-inner.ghost { position: absolute; left: 0; right: 0; top: 0; transition: opacity .8s ease, transform .8s ease; pointer-events: none; }
 
   .line {
     min-height: var(--line-h);
@@ -860,13 +860,16 @@
   // Types short, punchy lines the first time someone opens the app. Each one
   // lands and scrolls up; then the whole thing rolls off and the quote arrives.
   const WELCOME = [
+    "A place to just write.",
+    "No editing. You can't go back, so don't try.",
+    "Just get the thought out.",
+    "Clean it up later.",
+    "A journal entry.",
+    "A blog post.",
+    "The first page of your book.",
     "Keep it.",
-    "Or.",
-    "Burn it.",
-    "All local.",
-    "All private.",
-    "All yours.",
-    "Just Type."
+    "Or, burn it.",
+    "Type."
   ];
   const seenWelcome = () => { try { return localStorage.getItem('type.welcomed') === '1'; } catch (e) { return true; } };
   const markWelcomed = () => { try { localStorage.setItem('type.welcomed', '1'); } catch (e) {} };
@@ -890,10 +893,11 @@
       userFloor = locked.length;              // the welcome doesn't count toward your word count
       layout();
     };
-    const finishLast = () => {                 // commit "just type." without the scroll jump, then hand off
+    const finishLast = () => {                 // commit "type." without the scroll jump, then hand off
       timers.forEach(clearTimeout); timers = [];
       quoteHold = { floor: locked.length };    // hold so the last line doesn't scroll up a notch
       quoteCommitSilent();                      // renders the burnt-orange period (accentPeriod is on)
+      const c = feed.querySelector('.caret'); if (c) c.remove();   // no cursor below "Type." while it sits
       accentPeriod = false;
       quotePlaying = false; quoteSkip = null;
       userFloor = locked.length;
@@ -901,7 +905,7 @@
         const floorNow = locked.length;
         timers.push(setTimeout(() => {
           if (!frozen && !quotePlaying && locked.length === floorNow && current === '') fadeWelcomeToQuote(onDone);
-        }, 850));
+        }, 2000));   // let "Type." sit for two seconds
       }
     };
     const typeLine = (i) => {
@@ -932,17 +936,22 @@
     const caret = feed.querySelector('.caret'); if (caret) caret.remove();
     // freeze already-faded lines at 0 so the clone doesn't replay their fade (the flash)
     feed.querySelectorAll('.welcome-fade').forEach(el => { el.classList.remove('welcome-fade'); el.style.opacity = '0'; });
+    const m = /translateY\(([-\d.]+)px\)/.exec(feed.style.transform || '');
+    const baseY = m ? parseFloat(m[1]) : 0;
     const ghost = feed.cloneNode(true);
     ghost.removeAttribute('id');
     ghost.classList.remove('eject');
     ghost.classList.add('ghost');
-    ghost.style.transform = feed.style.transform;   // hold the welcome at its scrolled position
+    ghost.style.transform = `translateY(${baseY}px)`;   // hold the welcome where it sits
     feed.parentElement.appendChild(ghost);
     newSheet();                                       // clean sheet for the quote (snaps, no drop)
-    requestAnimationFrame(() => { ghost.style.opacity = '0'; });   // the welcome fades out
+    requestAnimationFrame(() => {                     // the welcome fades while drifting up
+      ghost.style.opacity = '0';
+      ghost.style.transform = `translateY(${baseY - 40}px)`;
+    });
     setTimeout(() => ghost.remove(), 1000);
     // quote types in once the welcome is mostly gone, so it doesn't type over it
-    if (cb) setTimeout(() => { if (!frozen && !quotePlaying && locked.length === 0 && current === '') cb(); }, 560);
+    if (cb) setTimeout(() => { if (!frozen && !quotePlaying && locked.length === 0 && current === '') cb(); }, 480);
   }
 
   function skipIntro() {

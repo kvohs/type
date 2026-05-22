@@ -132,7 +132,7 @@
   }
   .feed-inner.eject { transition: transform .62s cubic-bezier(.5,0,.75,0) !important; }
   /* a frozen copy of the welcome that fades in place while the quote types in fresh */
-  .feed-inner.ghost { position: absolute; left: 0; right: 0; top: 0; transition: opacity 1.1s ease; pointer-events: none; }
+  .feed-inner.ghost { position: absolute; left: 0; right: 0; top: 0; transition: opacity .8s ease; pointer-events: none; }
 
   .line {
     min-height: var(--line-h);
@@ -406,7 +406,7 @@
     <label class="setrow"><span>On startup</span><input type="checkbox" id="setQuoteOpen" /><span class="sw"></span></label>
     <label class="setrow"><span>On burn</span><input type="checkbox" id="setQuoteBurn" /><span class="sw"></span></label>
     <div class="setdiv" id="saveDiv" hidden></div>
-    <div class="settings-title" id="saveTitle" hidden>save as .md to <span class="info" tabindex="0">i<span class="tip">Point this at your Obsidian vault — or any notes folder — and kept pages land straight in your notes. Plain Markdown, no import step.</span></span></div>
+    <div class="settings-title" id="saveTitle" hidden>save as .md to <span class="info" tabindex="0">i<span class="tip">Point this at your Obsidian vault — or any notes folder — and kept pages land straight in your notes. Plain markdown, no import step.</span></span></div>
     <div class="setrow setrow-btn" id="rowSaveFolder" hidden>
       <span class="setval" id="saveFolderLabel">Downloads</span>
       <span class="setpick">choose…</span>
@@ -860,15 +860,13 @@
   // Types short, punchy lines the first time someone opens the app. Each one
   // lands and scrolls up; then the whole thing rolls off and the quote arrives.
   const WELCOME = [
-    "This is a place to just write.",
-    "No editing. You can't go back, so don't try.",
-    "Just get the thought out.",
-    "A journal entry.",
-    "A blog post.",
-    "The first page of your book.",
-    "Keep it, and it saves as markdown, anywhere you like.",
-    "Or burn it, and it's gone.",
-    "Just type."
+    "Keep it.",
+    "Or.",
+    "Burn it.",
+    "All local.",
+    "All private.",
+    "All yours.",
+    "Just Type."
   ];
   const seenWelcome = () => { try { return localStorage.getItem('type.welcomed') === '1'; } catch (e) { return true; } };
   const markWelcomed = () => { try { localStorage.setItem('type.welcomed', '1'); } catch (e) {} };
@@ -940,10 +938,11 @@
     ghost.classList.add('ghost');
     ghost.style.transform = feed.style.transform;   // hold the welcome at its scrolled position
     feed.parentElement.appendChild(ghost);
-    newSheet();                                       // clean sheet for the quote
-    requestAnimationFrame(() => { ghost.style.opacity = '0'; });
-    setTimeout(() => ghost.remove(), 1300);
-    if (cb && !frozen) cb();                           // quote starts typing as the ghost fades
+    newSheet();                                       // clean sheet for the quote (snaps, no drop)
+    requestAnimationFrame(() => { ghost.style.opacity = '0'; });   // the welcome fades out
+    setTimeout(() => ghost.remove(), 1000);
+    // quote types in once the welcome is mostly gone, so it doesn't type over it
+    if (cb) setTimeout(() => { if (!frozen && !quotePlaying && locked.length === 0 && current === '') cb(); }, 560);
   }
 
   function skipIntro() {
@@ -1013,7 +1012,10 @@
     clearDraft();
     feed.innerHTML = '';
     feed.classList.remove('eject');
+    feed.style.transition = 'none';            // snap back to the top — no cursor sliding down
     feed.style.transform = 'translateY(0)';
+    void feed.offsetWidth;                      // commit it before re-enabling the transition
+    feed.style.transition = '';
     renderActive();
     layout();
     updateMeter();

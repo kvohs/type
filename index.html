@@ -434,7 +434,7 @@
   const meterTime  = document.getElementById('meterTime');
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: false, smolderSecs: 10, wordCount: false, timer: false, sound: true, clicks: true, carriage: true, bell: true, quoteOpen: true, quoteBurn: false, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: true, onTop: false, smolder: true, smolderSecs: 10, wordCount: true, timer: true, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -524,7 +524,7 @@
   }
   burnAfterVal.addEventListener('click', (e) => {
     e.preventDefault(); e.stopPropagation();   // cycle the time without flipping the switch
-    const opts = [10, 30, 60];
+    const opts = [10, 30, 60, 120];
     settings.smolderSecs = opts[(opts.indexOf(settings.smolderSecs || 10) + 1) % opts.length];
     saveSettings(); updateBurnAfter(); resetSmolder();
   });

@@ -810,13 +810,15 @@
   }
 
   /* ================= WELCOME (first run only) ================= */
-  // Types a short note in the app's own voice the very first time someone
-  // opens it, then rolls away as they write — or they burn it. Never repeats.
+  // Types short, punchy lines the first time someone opens the app. Each one
+  // lands and scrolls up; then the whole thing rolls off and the quote arrives.
   const WELCOME = [
     "This is a place to just write.",
-    "No editing. You can't go back and fix things, so don't try. Just get the thought out.",
-    "Write whatever you want. A journal entry, a blog post, the first page of your novel.",
-    "When you finish, keep it and it saves as a Markdown file you can put anywhere. Or burn it, and it's gone.",
+    "No editing. You can't go back, so don't try.",
+    "Just get the thought out.",
+    "A journal entry. A blog post. The first page of your book.",
+    "Keep it, and it saves as Markdown, anywhere you like.",
+    "Or burn it, and it's gone.",
     "Just type."
   ];
   const seenWelcome = () => { try { return localStorage.getItem('type.welcomed') === '1'; } catch (e) { return true; } };
@@ -824,27 +826,26 @@
 
   function seedWelcome(onDone) {
     if (phase !== 'writing' || quotePlaying) return;
-    const lines = [];   // '' entries mark the deliberate pause between paragraphs
-    WELCOME.forEach((p, i) => { if (i) lines.push(''); wrapText(p, MAX_COLS).forEach(l => lines.push(l)); });
+    const lines = [];
+    WELCOME.forEach(p => wrapText(p, MAX_COLS).forEach(l => lines.push(l)));
     const last = lines.length - 1;
     quotePlaying = true;
     let timers = [];
     let idx = 0;
-    const CHAR = 28;          // per-keystroke — slow enough to feel hand-typed
-    const LINE_PAUSE = 240;   // beat after a wrapped line
-    const PARA_PAUSE = 760;   // held beat between paragraphs (and before "just type.")
+    const CHAR = 45;          // slow, deliberate keystrokes
+    const LINE_PAUSE = 520;   // a clear beat as each punchy line lands and scrolls up
 
     const finish = (chain) => {
       timers.forEach(clearTimeout); timers = [];
       accentPeriod = false;
       quotePlaying = false; quoteSkip = null;
       if (chain && onDone) {
-        // played through → after a beat, roll the whole thing up and bring the quote
+        // played through → after a beat, roll the whole thing off and bring the quote
         // in on a fresh sheet — unless you've started typing in the meantime
         const floorNow = locked.length;
         timers.push(setTimeout(() => {
           if (!frozen && !quotePlaying && locked.length === floorNow && current === '') rollAwayWelcome(onDone);
-        }, 700));
+        }, 850));
       } else {
         quoteHold = { floor: locked.length };   // skipped → hold the instructions, start writing
         layout();
@@ -854,10 +855,6 @@
       idx = i;
       if (i > last) { finish(true); return; }
       accentPeriod = (i === last);            // the closing "just type." keeps the burnt-orange period
-      if (lines[i] === '') {                  // paragraph break: hold, then drop the gap and carry on
-        timers.push(setTimeout(() => { current = ''; quoteCommitSilent(); typeLine(i + 1); }, PARA_PAUSE));
-        return;
-      }
       current = '';
       let t = 0;
       for (const ch of lines[i]) { const c = ch; timers.push(setTimeout(() => { current += c; renderActive(); }, t)); t += CHAR; }

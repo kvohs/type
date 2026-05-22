@@ -316,6 +316,13 @@
     flex: none; font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
     color: var(--accent);
   }
+  .info {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 13px; height: 13px; margin-left: 5px; vertical-align: middle;
+    border: 1px solid var(--ink-faint); border-radius: 50%;
+    font-size: 9px; font-weight: 700; font-style: italic; line-height: 1;
+    color: var(--ink-quiet); cursor: help; text-transform: none; letter-spacing: 0;
+  }
 </style>
 </head>
 <body>
@@ -358,7 +365,7 @@
     <label class="setrow"><span>On startup</span><input type="checkbox" id="setQuoteStartup" /><span class="sw"></span></label>
     <label class="setrow"><span>On burn</span><input type="checkbox" id="setQuoteBurn" /><span class="sw"></span></label>
     <div class="setdiv" id="saveDiv" hidden></div>
-    <div class="settings-title" id="saveTitle" hidden>save as .md to</div>
+    <div class="settings-title" id="saveTitle" hidden>save as .md to <span class="info" title="Point this at your Obsidian vault (or any notes folder) and kept pages land straight in your notes — plain Markdown, no import step.">i</span></div>
     <div class="setrow setrow-btn" id="rowSaveFolder" hidden>
       <span class="setval" id="saveFolderLabel">Downloads</span>
       <span class="setpick">choose…</span>
@@ -666,7 +673,8 @@
       activeEl.classList.remove('intro-line');
       phase = 'writing';
       hints.classList.remove('dim');     // idle at the start → controls visible
-      if (settings.quoteStartup) introTimers.push(setTimeout(seedQuote, 320));
+      if (!seenWelcome()) { markWelcomed(); introTimers.push(setTimeout(seedWelcome, 320)); }
+      else if (settings.quoteStartup) introTimers.push(setTimeout(seedQuote, 320));
     }, t));
   }
 
@@ -739,6 +747,46 @@
       placeAttributionAndEnd();
     };
 
+    typeLine(0);
+  }
+
+  /* ================= WELCOME (first run only) ================= */
+  // Types a short note in the app's own voice the very first time someone
+  // opens it, then rolls away as they write — or they burn it. Never repeats.
+  const WELCOME = [
+    "We edit while we write, and the thought slips away. So here you can't go back — the line you're on is the only one you can touch. Just get it out.",
+    "When it's down, keep it (⌘S) or burn it (⌘⌫). Kept pages are plain Markdown; point the save folder at your Obsidian vault and they land in your notes.",
+    "Start typing and this rolls away. Or burn it, and walk off lighter."
+  ];
+  const seenWelcome = () => { try { return localStorage.getItem('type.welcomed') === '1'; } catch (e) { return true; } };
+  const markWelcomed = () => { try { localStorage.setItem('type.welcomed', '1'); } catch (e) {} };
+
+  function seedWelcome() {
+    if (phase !== 'writing' || quotePlaying) return;
+    const lines = [];
+    WELCOME.forEach((p, i) => { if (i) lines.push(''); wrapText(p, MAX_COLS).forEach(l => lines.push(l)); });
+    quotePlaying = true;
+    let timers = [];
+    let idx = 0;
+    const end = () => {
+      timers.forEach(clearTimeout); timers = [];
+      quoteHold = { floor: locked.length };   // hold it like a quote — stays put until you write under it
+      layout();
+      quotePlaying = false; quoteSkip = null;
+    };
+    const typeLine = (i) => {
+      idx = i;
+      if (i >= lines.length) { end(); return; }
+      current = '';
+      let t = 0;
+      for (const ch of lines[i]) { const c = ch; timers.push(setTimeout(() => { current += c; renderActive(); }, t)); t += 14; }
+      timers.push(setTimeout(() => { quoteCommitSilent(); typeLine(i + 1); }, t + 45));
+    };
+    quoteSkip = () => {
+      timers.forEach(clearTimeout); timers = [];
+      for (let i = idx; i < lines.length; i++) { current = lines[i]; quoteCommitSilent(); }
+      end();
+    };
     typeLine(0);
   }
 

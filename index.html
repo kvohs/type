@@ -327,6 +327,7 @@
     flex: none; font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
     color: var(--accent);
   }
+  .burnsecs { margin-left: auto; margin-right: 14px; cursor: pointer; }
   .info {
     position: relative;
     display: inline-flex; align-items: center; justify-content: center;
@@ -383,11 +384,7 @@
     <div class="setdiv"></div>
     <label class="setrow"><span>Zen mode</span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
     <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top</span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
-    <label class="setrow"><span>Burn if I stop</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
-    <div class="setrow setrow-btn" id="rowBurnAfter" hidden>
-      <span class="setval">Burn after</span>
-      <span class="setpick" id="burnAfterVal">10s</span>
-    </div>
+    <label class="setrow"><span>Burn if I stop</span><span class="setpick burnsecs" id="burnAfterVal" hidden>10s</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
     <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
     <label class="setrow"><span>Timer</span><input type="checkbox" id="setTimer" /><span class="sw"></span></label>
     <div class="setdiv"></div>
@@ -512,13 +509,13 @@
   rowReplay.addEventListener('click', replayIntro);
 
   // how long the page waits before burning when you stop (only relevant with "Burn if I stop")
-  const rowBurnAfter = document.getElementById('rowBurnAfter');
   const burnAfterVal = document.getElementById('burnAfterVal');
   function updateBurnAfter() {
-    rowBurnAfter.hidden = !settings.smolder;
+    burnAfterVal.hidden = !settings.smolder;
     burnAfterVal.textContent = (settings.smolderSecs || 10) + 's';
   }
-  rowBurnAfter.addEventListener('click', () => {
+  burnAfterVal.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();   // cycle the time without flipping the switch
     const opts = [10, 30, 60];
     settings.smolderSecs = opts[(opts.indexOf(settings.smolderSecs || 10) + 1) % opts.length];
     saveSettings(); updateBurnAfter(); resetSmolder();

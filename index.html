@@ -277,11 +277,17 @@
 
   /* ---------- settings panel ---------- */
   .settings {
-    position: fixed; left: 50%; transform: translateX(-50%); bottom: 64px; z-index: 12;
-    width: 248px; padding: 14px 16px 10px;
-    background: var(--panel); border: 1px solid var(--rule); border-radius: 12px;
-    box-shadow: 0 12px 34px -14px var(--panel-shadow);
+    position: fixed; right: 22px; top: 50%; transform: translateY(-50%); z-index: 12;
+    width: 256px; max-height: calc(100vh - 36px); overflow-y: auto;
+    padding: 14px 16px 12px;
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 14px;
+    box-shadow: 0 18px 44px -18px var(--panel-shadow);
     font-family: var(--mono);
+    animation: settingsIn .22s cubic-bezier(.22,.61,.25,1);   /* slides in from the right each time it opens */
+  }
+  @keyframes settingsIn {
+    from { opacity: 0; transform: translateY(-50%) translateX(14px); }
+    to   { opacity: 1; transform: translateY(-50%) translateX(0); }
   }
   .settings[hidden] { display: none; }
   .settings-title {
@@ -388,6 +394,11 @@
       <span class="setval" id="saveFolderLabel">Downloads</span>
       <span class="setpick">choose…</span>
     </div>
+    <div class="setdiv"></div>
+    <div class="setrow setrow-btn" id="rowReplay">
+      <span class="setval">Replay the intro</span>
+      <span class="setpick">play</span>
+    </div>
   </div>
 
 <script src="quotes.js"></script>
@@ -472,6 +483,18 @@
   });
   applyOnTop();
   if (settings.zen) applyZen();
+
+  // replay the first-run intro on demand (welcome, then the opening quote) — starts a fresh sheet
+  const rowReplay = document.getElementById('rowReplay');
+  function replayIntro() {
+    settingsEl.hidden = true;
+    if (quotePlaying && quoteSkip) quoteSkip();
+    introTimers.forEach(clearTimeout); introTimers = [];
+    newSheet();
+    phase = 'writing';
+    introTimers.push(setTimeout(() => seedWelcome(() => seedQuote(OPENER)), 220));
+  }
+  rowReplay.addEventListener('click', replayIntro);
 
   // line width adapts to the window — no fixed character count, no minimum screen size
   let MAX_COLS = 62;

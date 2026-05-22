@@ -754,20 +754,24 @@
   // Types a short note in the app's own voice the very first time someone
   // opens it, then rolls away as they write — or they burn it. Never repeats.
   const WELCOME = [
-    "We edit while we write, and the thought slips away. So here you can't go back — the line you're on is the only one you can touch. Just get it out.",
-    "When it's down, keep it (⌘S) or burn it (⌘⌫). Kept pages are plain Markdown; point the save folder at your Obsidian vault and they land in your notes.",
-    "Start typing and this rolls away. Or burn it, and walk off lighter."
+    "A place to just write. No editing allowed. Just get it out — a journal entry, a blog post, a chapter of your next novel.",
+    "⌘S saves it as a Markdown file. Point it at your Obsidian vault, or anywhere on your computer. Or burn it (⌘⌫), and it's gone.",
+    "Just type."
   ];
   const seenWelcome = () => { try { return localStorage.getItem('type.welcomed') === '1'; } catch (e) { return true; } };
   const markWelcomed = () => { try { localStorage.setItem('type.welcomed', '1'); } catch (e) {} };
 
   function seedWelcome() {
     if (phase !== 'writing' || quotePlaying) return;
-    const lines = [];
+    const lines = [];   // '' entries mark the deliberate pause between paragraphs
     WELCOME.forEach((p, i) => { if (i) lines.push(''); wrapText(p, MAX_COLS).forEach(l => lines.push(l)); });
     quotePlaying = true;
     let timers = [];
     let idx = 0;
+    const CHAR = 28;          // per-keystroke — slow enough to feel hand-typed
+    const LINE_PAUSE = 240;   // beat after a wrapped line
+    const PARA_PAUSE = 760;   // held beat between paragraphs (and before "just type.")
+
     const end = () => {
       timers.forEach(clearTimeout); timers = [];
       quoteHold = { floor: locked.length };   // hold it like a quote — stays put until you write under it
@@ -777,10 +781,14 @@
     const typeLine = (i) => {
       idx = i;
       if (i >= lines.length) { end(); return; }
+      if (lines[i] === '') {                  // paragraph break: hold, then drop the gap and carry on
+        timers.push(setTimeout(() => { current = ''; quoteCommitSilent(); typeLine(i + 1); }, PARA_PAUSE));
+        return;
+      }
       current = '';
       let t = 0;
-      for (const ch of lines[i]) { const c = ch; timers.push(setTimeout(() => { current += c; renderActive(); }, t)); t += 14; }
-      timers.push(setTimeout(() => { quoteCommitSilent(); typeLine(i + 1); }, t + 45));
+      for (const ch of lines[i]) { const c = ch; timers.push(setTimeout(() => { current += c; renderActive(); }, t)); t += CHAR; }
+      timers.push(setTimeout(() => { quoteCommitSilent(); typeLine(i + 1); }, t + LINE_PAUSE));
     };
     quoteSkip = () => {
       timers.forEach(clearTimeout); timers = [];

@@ -223,17 +223,17 @@
 
   /* ---------- burn ---------- */
   .ash {
-    animation: burn-char 1700ms ease-in forwards;
+    animation: burn-char 1900ms ease forwards;
     animation-delay: var(--delay, 0ms);
-    transform-origin: 50% 70%;
-    will-change: color, filter, opacity, transform;
+    transform-origin: 50% 60%;
+    will-change: opacity, color, transform;   /* no per-char blur — that was the jank */
   }
   /* char & smolder: ink → ember → charred black → gone, drifting up in place */
   @keyframes burn-char {
-    0%   { color: var(--ink); filter: blur(0); opacity: 1; text-shadow: none; }
-    34%  { color: var(--ember); text-shadow: 0 0 8px rgba(176,95,74,.5); }
-    66%  { color: #2a1a12; text-shadow: none; }
-    100% { color: rgba(20,12,8,0); filter: blur(1.3px); opacity: 0; transform: translateY(var(--y, -7px)); }
+    0%   { color: var(--ink); opacity: 1; transform: translateY(0); text-shadow: none; }
+    28%  { color: var(--ember); text-shadow: 0 0 7px rgba(176,95,74,.5); }
+    60%  { color: #2a1a12; text-shadow: none; }
+    100% { color: rgba(20,12,8,0); opacity: 0; transform: translateY(var(--y, -8px)); }
   }
   .ember {
     position: absolute; width: 3px; height: 3px; border-radius: 999px;
@@ -885,32 +885,37 @@
     const CHAR = 45;          // slow, deliberate keystrokes
     const LINE_PAUSE = 520;   // a clear beat after each punchy line
 
-    const finish = (chain) => {
-      timers.forEach(clearTimeout); timers = [];
+    const hold = () => {                       // welcome just stays put (skipped, or quotes off)
       accentPeriod = false;
       quotePlaying = false; quoteSkip = null;
-      if (chain && onDone) {
-        // played through → after a beat, the quote types in fresh while the welcome
-        // fades out behind it. Unless you've already started typing.
+      quoteHold = { floor: locked.length };
+      userFloor = locked.length;              // the welcome doesn't count toward your word count
+      layout();
+    };
+    const finishLast = () => {                 // commit "just type." without the scroll jump, then hand off
+      timers.forEach(clearTimeout); timers = [];
+      quoteHold = { floor: locked.length };    // hold so the last line doesn't scroll up a notch
+      quoteCommitSilent();                      // renders the burnt-orange period (accentPeriod is on)
+      accentPeriod = false;
+      quotePlaying = false; quoteSkip = null;
+      userFloor = locked.length;
+      if (onDone) {
         const floorNow = locked.length;
         timers.push(setTimeout(() => {
           if (!frozen && !quotePlaying && locked.length === floorNow && current === '') fadeWelcomeToQuote(onDone);
         }, 850));
-      } else {
-        quoteHold = { floor: locked.length };   // skipped → hold the instructions, start writing
-        userFloor = locked.length;              // the welcome doesn't count toward your word count
-        layout();
       }
     };
     const typeLine = (i) => {
       idx = i;
-      if (i > last) { finish(true); return; }
+      if (i > last) { hold(); return; }
       accentPeriod = (i === last);            // the closing "just type." keeps the burnt-orange period
       if (prevEl) { prevEl.classList.add('welcome-fade'); prevEl = null; }   // the last line fades as this one begins
       current = '';
       let t = 0;
       for (const ch of lines[i]) { const c = ch; timers.push(setTimeout(() => { current += c; renderActive(); }, t)); t += CHAR; }
       timers.push(setTimeout(() => {
+        if (i === last) { finishLast(); return; }
         quoteCommitSilent();
         prevEl = feed.children[feed.children.length - 2] || null;   // the line just committed
         typeLine(i + 1);
@@ -919,7 +924,7 @@
     quoteSkip = () => {
       timers.forEach(clearTimeout); timers = [];
       for (let i = idx; i <= last; i++) { accentPeriod = (i === last); current = lines[i]; quoteCommitSilent(); }
-      finish(false);
+      hold();
     };
     typeLine(0);
   }

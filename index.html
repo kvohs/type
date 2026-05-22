@@ -80,6 +80,19 @@
   body.dispatch .intro,
   body.dispatch .stamp .date { text-shadow: 0 .5px 0 rgba(42,36,24,.28); }
 
+  /* CLASSIFIED rubber stamp — only in the dispatch theme */
+  .classified {
+    position: fixed; top: 8%; right: 6.5%; z-index: 3;
+    display: none; pointer-events: none; user-select: none;
+    font-family: var(--mono); font-weight: 700;
+    font-size: 30px; letter-spacing: .15em; text-transform: uppercase;
+    color: var(--accent);
+    border: 3px solid var(--accent); border-radius: 3px;
+    padding: 6px 15px; transform: rotate(-12deg);
+    opacity: .28; mix-blend-mode: multiply;   /* darkens into the paper like real ink */
+  }
+  body.dispatch .classified { display: block; }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body {
@@ -313,6 +326,7 @@
     <div class="intro" id="intro"></div>
     <div class="stamp" id="stamp"><div class="date" id="stampDate"></div><div class="kept" id="stampKept"></div></div>
     <div class="smolder-veil" id="smolderVeil"></div>
+    <div class="classified" aria-hidden="true">Classified</div>
   </div>
 
   <div class="hints dim" id="hints">

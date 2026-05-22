@@ -811,6 +811,7 @@
     quotePlaying = true;
     let timers = [];
     let nextLine = 0;
+    let firstSentenceDone = false;
 
     // the author is a quiet caption, not typed — it just settles in under the quote
     const placeAttributionAndEnd = () => {
@@ -823,13 +824,22 @@
       quotePlaying = false; quoteSkip = null;
     };
 
+    const CHAR = 40;   // deliberate, like a person typing it out
     const typeLine = (idx) => {
       if (idx >= bodyLines.length) { placeAttributionAndEnd(); return; }
       nextLine = idx;
       current = '';
+      const lineText = bodyLines[idx];
       let t = 0;
-      for (const ch of bodyLines[idx]) { const c = ch; timers.push(setTimeout(() => { current += c; renderActive(); }, t)); t += 20; }
-      timers.push(setTimeout(() => { quoteCommitSilent(); typeLine(idx + 1); }, t + 55));
+      for (let k = 0; k < lineText.length; k++) {
+        const c = lineText[k];
+        timers.push(setTimeout(() => { current += c; renderActive(); }, t));
+        t += CHAR + Math.random() * 12;                                   // a little human jitter
+        const endsSentence = /[.!?]/.test(c) && !/[.!?]/.test(lineText[k + 1] || '');
+        if (endsSentence) { t += firstSentenceDone ? 280 : 520; firstSentenceDone = true; }  // pause to think
+        else if (/[,;:]/.test(c)) t += 130;                               // a small breath
+      }
+      timers.push(setTimeout(() => { quoteCommitSilent(); typeLine(idx + 1); }, t + 80));
     };
 
     quoteSkip = () => {                        // a keystroke finishes the quote instantly

@@ -672,7 +672,7 @@
       activeEl.classList.remove('intro-line');
       phase = 'writing';
       hints.classList.remove('dim');     // idle at the start → controls visible
-      if (!seenWelcome()) { markWelcomed(); introTimers.push(setTimeout(seedWelcome, 320)); }
+      if (!seenWelcome()) { markWelcomed(); introTimers.push(setTimeout(() => seedWelcome(() => seedQuote(OPENER)), 320)); }
       else introTimers.push(setTimeout(() => seedQuote(OPENER), 320));   // fixed opener, every launch
     }, t));
   }
@@ -763,7 +763,7 @@
   const seenWelcome = () => { try { return localStorage.getItem('type.welcomed') === '1'; } catch (e) { return true; } };
   const markWelcomed = () => { try { localStorage.setItem('type.welcomed', '1'); } catch (e) {} };
 
-  function seedWelcome() {
+  function seedWelcome(onDone) {
     if (phase !== 'writing' || quotePlaying) return;
     const lines = [];   // '' entries mark the deliberate pause between paragraphs
     WELCOME.forEach((p, i) => { if (i) lines.push(''); wrapText(p, MAX_COLS).forEach(l => lines.push(l)); });
@@ -774,15 +774,24 @@
     const LINE_PAUSE = 240;   // beat after a wrapped line
     const PARA_PAUSE = 760;   // held beat between paragraphs (and before "just type.")
 
-    const end = () => {
+    const finish = (chain) => {
       timers.forEach(clearTimeout); timers = [];
-      quoteHold = { floor: locked.length };   // hold it like a quote — stays put until you write under it
-      layout();
       quotePlaying = false; quoteSkip = null;
+      if (chain && onDone) {
+        // played through → let the instructions roll up, then bring in the quote,
+        // unless you've already started typing in the meantime
+        const floorNow = locked.length;
+        timers.push(setTimeout(() => {
+          if (!frozen && !quotePlaying && locked.length === floorNow && current === '') onDone();
+        }, 900));
+      } else {
+        quoteHold = { floor: locked.length };   // skipped → hold the instructions, start writing
+        layout();
+      }
     };
     const typeLine = (i) => {
       idx = i;
-      if (i >= lines.length) { end(); return; }
+      if (i >= lines.length) { finish(true); return; }
       if (lines[i] === '') {                  // paragraph break: hold, then drop the gap and carry on
         timers.push(setTimeout(() => { current = ''; quoteCommitSilent(); typeLine(i + 1); }, PARA_PAUSE));
         return;
@@ -795,7 +804,7 @@
     quoteSkip = () => {
       timers.forEach(clearTimeout); timers = [];
       for (let i = idx; i < lines.length; i++) { current = lines[i]; quoteCommitSilent(); }
-      end();
+      finish(false);
     };
     typeLine(0);
   }

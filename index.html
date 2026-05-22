@@ -213,15 +213,17 @@
 
   /* ---------- burn ---------- */
   .ash {
-    animation: burn-char 1100ms ease-in forwards;
+    animation: burn-char 1700ms ease-in forwards;
     animation-delay: var(--delay, 0ms);
     transform-origin: 50% 70%;
     will-change: color, filter, opacity, transform;
   }
+  /* char & smolder: ink → ember → charred black → gone, drifting up in place */
   @keyframes burn-char {
-    0%   { color: var(--ink); filter: blur(0); opacity: 1; text-shadow: none; transform: translate(0,0) rotate(0deg); }
-    26%  { color: var(--ember); filter: blur(0); opacity: 1; text-shadow: 0 0 9px rgba(176,95,74,.5); }
-    100% { color: rgba(18,19,22,0); filter: blur(1.8px); opacity: 0; transform: translate(var(--x), var(--y)) rotate(var(--r)); }
+    0%   { color: var(--ink); filter: blur(0); opacity: 1; text-shadow: none; }
+    34%  { color: var(--ember); text-shadow: 0 0 8px rgba(176,95,74,.5); }
+    66%  { color: #2a1a12; text-shadow: none; }
+    100% { color: rgba(20,12,8,0); filter: blur(1.3px); opacity: 0; transform: translateY(var(--y, -7px)); }
   }
   .ember {
     position: absolute; width: 3px; height: 3px; border-radius: 999px;
@@ -252,16 +254,29 @@
   .smolder-veil {
     position: absolute; inset: 0; z-index: 4;
     pointer-events: none; opacity: 0;
-    transition: opacity 1.1s ease;
-    background: radial-gradient(circle at 50% 45%,
-      rgba(0,0,0,0) 38%, rgba(176,95,74,.20) 76%, rgba(70,28,18,.46) 100%);
+    background: radial-gradient(circle at 50% 48%,
+      rgba(0,0,0,0) 28%, rgba(176,95,74,.28) 70%, rgba(70,28,18,.6) 100%);
   }
-  .stage.smoldering .smolder-veil { opacity: 1; animation: smolderFlicker 2.4s ease-in-out infinite; }
-  @keyframes smolderFlicker {
-    0%,100% { opacity: .82; }
-    40%     { opacity: 1; }
-    70%     { opacity: .9; }
+  /* the warm char creeps in steadily over the whole smolder, so you can see it coming */
+  .stage.smoldering .smolder-veil { animation: smolderGrow var(--smolder-dur, 6500ms) ease-in forwards; }
+  @keyframes smolderGrow { from { opacity: 0; } to { opacity: 1; } }
+
+  .meter {
+    position: fixed; left: 22px; top: 18px; z-index: 9;
+    display: flex; gap: 16px; pointer-events: none; user-select: none;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--ink-faint);
   }
+  .meter span:empty { display: none; }
+
+  .smolder-warn {
+    position: fixed; left: 0; right: 0; top: 40px; z-index: 7;
+    text-align: center; pointer-events: none; user-select: none;
+    font-family: var(--mono); font-size: 12px; letter-spacing: .24em; text-transform: uppercase;
+    color: var(--ember); opacity: 0;
+  }
+  .stage.smoldering .smolder-warn { animation: warnPulse 1.05s ease-in-out infinite; }
+  @keyframes warnPulse { 0%,100% { opacity: .3; } 50% { opacity: .95; } }
 
   /* ---------- settings panel ---------- */
   .settings {
@@ -346,6 +361,8 @@
     <div class="intro" id="intro"></div>
     <div class="stamp" id="stamp"><div class="date" id="stampDate"></div><div class="kept" id="stampKept"></div></div>
     <div class="smolder-veil" id="smolderVeil"></div>
+    <div class="smolder-warn" id="smolderWarn" aria-hidden="true">keep typing or this burns</div>
+    <div class="meter" id="meter" aria-hidden="true"><span id="meterWords"></span><span id="meterTime"></span></div>
   </div>
 
   <div class="hints dim" id="hints">
@@ -365,6 +382,8 @@
     <label class="setrow"><span>Zen mode</span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
     <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top</span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
     <label class="setrow"><span>Burn if I stop</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
+    <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
+    <label class="setrow"><span>Timer</span><input type="checkbox" id="setTimer" /><span class="sw"></span></label>
     <div class="setdiv"></div>
     <label class="setrow"><span>Sound</span><input type="checkbox" id="setSound" /><span class="sw"></span></label>
     <div class="setdiv"></div>
@@ -400,9 +419,11 @@
   const stampKept = document.getElementById('stampKept');
   const hintSettings = document.getElementById('hintSettings');
   const settingsEl = document.getElementById('settings');
+  const meterWords = document.getElementById('meterWords');
+  const meterTime  = document.getElementById('meterTime');
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: false, sound: true, clicks: true, carriage: true, bell: true, quoteOpen: true, quoteBurn: false, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: false, wordCount: false, timer: false, sound: true, clicks: true, carriage: true, bell: true, quoteOpen: true, quoteBurn: false, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -410,7 +431,7 @@
   const applyTheme = () => {
     THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { dark: document.getElementById('setDark'), amber: document.getElementById('setAmber'), dispatch: document.getElementById('setDispatch'), zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { dark: document.getElementById('setDark'), amber: document.getElementById('setAmber'), dispatch: document.getElementById('setDispatch'), zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
@@ -424,6 +445,7 @@
       if (k === 'zen')   applyZen();
       if (k === 'onTop') applyOnTop();
       if (k === 'smolder') { if (settings.smolder) scheduleSmolder(); else coolSmolder(); }
+      if (k === 'wordCount' || k === 'timer') updateMeter();
     });
   });
   applyTheme();
@@ -506,6 +528,7 @@
   let bellRung = false;
   let accentPeriod = false;        // colors a line's trailing period (the "type." burnt-orange dot)
   let quoteHold = null;            // when a quote is seeded, holds it in place until you've written under it
+  let sheetStart = null;           // when the current sheet's writing began (for the timer)
   const QUOTE_HOLD_ROWS = 3;       // lines you can type beneath a quote before it starts rolling up
 
   /* ================= SOUND ================= */
@@ -804,7 +827,7 @@
     "No editing. You can't go back, so don't try.",
     "Just get the thought out.",
     "A journal entry. A blog post. The first page of your book.",
-    "Keep it, and it saves as Markdown, anywhere you like.",
+    "Keep it, and it saves as markdown, anywhere you like.",
     "Or burn it, and it's gone.",
     "Just type."
   ];
@@ -919,6 +942,7 @@
   function newSheet() {
     locked = []; current = ''; activeEl = null; bellRung = false;
     quoteHold = null;
+    sheetStart = null;
     coolSmolder();
     clearDraft();
     feed.innerHTML = '';
@@ -926,6 +950,7 @@
     feed.style.transform = 'translateY(0)';
     renderActive();
     layout();
+    updateMeter();
   }
 
   function pushChar(c) {
@@ -1003,7 +1028,7 @@
 
   /* ================= BURN (ember + smoke + stillness) ================= */
   function makeEmbers() {
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 24; i++) {
       const e = document.createElement('span');
       e.className = 'ember';
       e.style.left = (12 + Math.random() * 64) + '%';
@@ -1016,7 +1041,7 @@
     }
   }
   function makeSmoke() {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 5; i++) {
       const s = document.createElement('div');
       s.className = 'smoke';
       s.style.left = (26 + Math.random() * 34) + '%';
@@ -1035,25 +1060,23 @@
     const chars = [...feed.querySelectorAll('.ch')];
     chars.forEach((s, i) => {
       s.classList.add('ash');
-      s.style.setProperty('--delay', Math.min(520, i * 3 + Math.random() * 130) + 'ms');
-      s.style.setProperty('--x', (Math.random() * 44 - 22).toFixed(1) + 'px');
-      s.style.setProperty('--y', (-24 - Math.random() * 54).toFixed(1) + 'px');
-      s.style.setProperty('--r', (Math.random() * 24 - 12).toFixed(1) + 'deg');
+      s.style.setProperty('--delay', Math.min(700, i * 4 + Math.random() * 160) + 'ms');
+      s.style.setProperty('--y', (-5 - Math.random() * 7).toFixed(1) + 'px');
     });
     whoosh();
     makeEmbers();
-    setTimeout(makeSmoke, 720);
+    setTimeout(makeSmoke, 600);
     setTimeout(() => {
       newSheet(); frozen = false;
       if (settings.quoteBurn) setTimeout(seedQuote, 450);   // a quote types in after the burn, then rolls up as you write
-    }, 2700);  // a held beat before the fresh sheet
+    }, 3000);  // a held beat before the fresh sheet (the char-burn runs longer)
   }
 
   /* ================= SMOLDER (burn if you stop) ================= */
   // Opt-in. Sit idle with words on the page and a warm vignette creeps in; keep
   // sitting and the whole sheet burns itself. Any keystroke cools it back down.
-  const SMOLDER_WARN_MS = 2500;   // grace period before the page starts to smolder
-  const SMOLDER_BURN_MS = 4500;   // smolder, then burn — 7s total from your last keystroke
+  const SMOLDER_WARN_MS = 3500;   // grace period before the page starts to smolder
+  const SMOLDER_BURN_MS = 6500;   // smolder, then burn — 10s total from your last keystroke
   const smolderVeil = document.getElementById('smolderVeil');
   let smolderWarnTimer = null, smolderBurnTimer = null, smolderEmberTimer = null;
   let smoldering = false;
@@ -1081,12 +1104,26 @@
     if (smoldering) { smoldering = false; stage.classList.remove('smoldering'); }
   }
 
+  function smolderTone() {                 // a low, ominous swell when the page starts to smolder
+    if (!settings.sound) return;
+    const ctx = AC(), t = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(116, t); o.frequency.linearRampToValueAtTime(88, t + 0.9);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.05, t + 0.3);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 1.2);
+  }
+
   function startSmolder() {
     if (!settings.smolder || phase !== 'writing' || frozen || !hasContent()) return;
     smoldering = true;
+    smolderVeil.style.setProperty('--smolder-dur', SMOLDER_BURN_MS + 'ms');   // veil grows over the whole window
     stage.classList.add('smoldering');
+    smolderTone();
     smolderEmbers();
-    smolderEmberTimer = setInterval(smolderEmbers, 620);
+    smolderEmberTimer = setInterval(smolderEmbers, 560);
     smolderBurnTimer = setTimeout(() => { coolSmolder(); burn(); }, SMOLDER_BURN_MS);
   }
 
@@ -1143,6 +1180,20 @@
     scheduleSmolder();
   }
 
+  /* ================= METER (word count + timer) ================= */
+  function ensureClock() { if (sheetStart === null) sheetStart = Date.now(); }
+  function updateMeter() {
+    if (settings.wordCount) {
+      const n = (([...locked, current].join(' ')).match(/\S+/g) || []).length;
+      meterWords.textContent = n === 1 ? '1 word' : n + ' words';
+    } else meterWords.textContent = '';
+    if (settings.timer && sheetStart) {
+      const s = Math.max(0, Math.floor((Date.now() - sheetStart) / 1000));
+      meterTime.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    } else meterTime.textContent = '';
+  }
+  setInterval(updateMeter, 1000);
+
   /* ================= HINTS ================= */
   // inverted: typing hides the controls (just thoughts); a pause brings them back.
   function nudgeHints() {
@@ -1177,12 +1228,12 @@
     // a keystroke finishes a quote that's still typing itself in, then you carry on
     if (quotePlaying && (e.key === 'Enter' || e.key === 'Backspace' || e.key.length === 1)) quoteSkip();
 
-    if (e.key === 'Enter') { e.preventDefault(); commitLine(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); return; }
+    if (e.key === 'Enter') { e.preventDefault(); commitLine(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter(); return; }
 
     if (e.key === 'Backspace') {
       e.preventDefault();
       if (current.length > 0) { current = current.slice(0, -1); renderActive(); thock(); }
-      markTyping(); nudgeHints(); resetSmolder(); persistDraft();
+      markTyping(); nudgeHints(); resetSmolder(); persistDraft(); updateMeter();
       return;
     }
 
@@ -1194,6 +1245,8 @@
       nudgeHints();
       resetSmolder();
       persistDraft();
+      ensureClock();
+      updateMeter();
     }
   });
 

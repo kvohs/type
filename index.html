@@ -125,6 +125,8 @@
     will-change: transform;
   }
   .feed-inner.eject { transition: transform .62s cubic-bezier(.5,0,.75,0) !important; }
+  /* a frozen copy of the welcome that fades in place while the quote types in fresh */
+  .feed-inner.ghost { position: absolute; left: 0; right: 0; top: 0; transition: opacity 1.1s ease; pointer-events: none; }
 
   .line {
     min-height: var(--line-h);
@@ -382,6 +384,10 @@
     <label class="setrow"><span>Zen mode</span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
     <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top</span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
     <label class="setrow"><span>Burn if I stop</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
+    <div class="setrow setrow-btn" id="rowBurnAfter" hidden>
+      <span class="setval">Burn after</span>
+      <span class="setpick" id="burnAfterVal">10s</span>
+    </div>
     <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
     <label class="setrow"><span>Timer</span><input type="checkbox" id="setTimer" /><span class="sw"></span></label>
     <div class="setdiv"></div>
@@ -423,7 +429,7 @@
   const meterTime  = document.getElementById('meterTime');
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: false, wordCount: false, timer: false, sound: true, clicks: true, carriage: true, bell: true, quoteOpen: true, quoteBurn: false, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: false, smolderSecs: 10, wordCount: false, timer: false, sound: true, clicks: true, carriage: true, bell: true, quoteOpen: true, quoteBurn: false, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -444,7 +450,7 @@
       if (THEMES.includes(k)) applyTheme();
       if (k === 'zen')   applyZen();
       if (k === 'onTop') applyOnTop();
-      if (k === 'smolder') { if (settings.smolder) scheduleSmolder(); else coolSmolder(); }
+      if (k === 'smolder') { if (settings.smolder) scheduleSmolder(); else coolSmolder(); updateBurnAfter(); }
       if (k === 'wordCount' || k === 'timer') updateMeter();
     });
   });
@@ -505,6 +511,20 @@
   }
   rowReplay.addEventListener('click', replayIntro);
 
+  // how long the page waits before burning when you stop (only relevant with "Burn if I stop")
+  const rowBurnAfter = document.getElementById('rowBurnAfter');
+  const burnAfterVal = document.getElementById('burnAfterVal');
+  function updateBurnAfter() {
+    rowBurnAfter.hidden = !settings.smolder;
+    burnAfterVal.textContent = (settings.smolderSecs || 10) + 's';
+  }
+  rowBurnAfter.addEventListener('click', () => {
+    const opts = [10, 30, 60];
+    settings.smolderSecs = opts[(opts.indexOf(settings.smolderSecs || 10) + 1) % opts.length];
+    saveSettings(); updateBurnAfter(); resetSmolder();
+  });
+  updateBurnAfter();
+
   // line width adapts to the window — no fixed character count, no minimum screen size
   let MAX_COLS = 62;
   let BELL_AT  = 56;
@@ -529,6 +549,7 @@
   let accentPeriod = false;        // colors a line's trailing period (the "type." burnt-orange dot)
   let quoteHold = null;            // when a quote is seeded, holds it in place until you've written under it
   let sheetStart = null;           // when the current sheet's writing began (for the timer)
+  let userFloor = 0;               // index in locked where your own writing starts (seeded quote excluded from word count)
   const QUOTE_HOLD_ROWS = 3;       // lines you can type beneath a quote before it starts rolling up
 
   /* ================= SOUND ================= */
@@ -797,6 +818,7 @@
       for (const a of attribLines) { current = a; quoteCommitSilent('attrib'); }
       quoteCommitSilent();                    // gap, then you write on a fresh line
       quoteHold = { floor: locked.length };   // keep the quote in place until you've written under it
+      userFloor = locked.length;              // your writing starts here — the quote doesn't count
       layout();
       quotePlaying = false; quoteSkip = null;
     };
@@ -850,17 +872,15 @@
       accentPeriod = false;
       quotePlaying = false; quoteSkip = null;
       if (chain && onDone) {
-        // played through → after a beat, drop one blank line and let the quote roll in
-        // as the next line. It holds in place like any quote. Unless you've started typing.
+        // played through → after a beat, the quote types in fresh while the welcome
+        // fades out behind it. Unless you've already started typing.
         const floorNow = locked.length;
         timers.push(setTimeout(() => {
-          if (!frozen && !quotePlaying && locked.length === floorNow && current === '') {
-            current = ''; quoteCommitSilent();   // a blank line of breathing room
-            onDone();
-          }
+          if (!frozen && !quotePlaying && locked.length === floorNow && current === '') fadeWelcomeToQuote(onDone);
         }, 850));
       } else {
         quoteHold = { floor: locked.length };   // skipped → hold the instructions, start writing
+        userFloor = locked.length;              // the welcome doesn't count toward your word count
         layout();
       }
     };
@@ -879,6 +899,21 @@
       finish(false);
     };
     typeLine(0);
+  }
+
+  // freeze the welcome as a fading ghost, clear to a fresh sheet, then type the quote in
+  function fadeWelcomeToQuote(cb) {
+    const caret = feed.querySelector('.caret'); if (caret) caret.remove();
+    const ghost = feed.cloneNode(true);
+    ghost.removeAttribute('id');
+    ghost.classList.remove('eject');
+    ghost.classList.add('ghost');
+    ghost.style.transform = feed.style.transform;   // hold the welcome at its scrolled position
+    feed.parentElement.appendChild(ghost);
+    newSheet();                                       // clean sheet for the quote
+    requestAnimationFrame(() => { ghost.style.opacity = '0'; });
+    setTimeout(() => ghost.remove(), 1300);
+    if (cb && !frozen) cb();                           // quote starts typing as the ghost fades
   }
 
   function skipIntro() {
@@ -943,6 +978,7 @@
     locked = []; current = ''; activeEl = null; bellRung = false;
     quoteHold = null;
     sheetStart = null;
+    userFloor = 0;
     coolSmolder();
     clearDraft();
     feed.innerHTML = '';
@@ -1075,8 +1111,11 @@
   /* ================= SMOLDER (burn if you stop) ================= */
   // Opt-in. Sit idle with words on the page and a warm vignette creeps in; keep
   // sitting and the whole sheet burns itself. Any keystroke cools it back down.
-  const SMOLDER_WARN_MS = 3500;   // grace period before the page starts to smolder
-  const SMOLDER_BURN_MS = 6500;   // smolder, then burn — 10s total from your last keystroke
+  // total idle-to-burn time is a setting (10 / 30 / 60s): ~35% grace, then ~65% visible smolder
+  function smolderTimes() {
+    const total = (settings.smolderSecs || 10) * 1000;
+    return { warn: Math.round(total * 0.35), burn: Math.round(total * 0.65) };
+  }
   const smolderVeil = document.getElementById('smolderVeil');
   let smolderWarnTimer = null, smolderBurnTimer = null, smolderEmberTimer = null;
   let smoldering = false;
@@ -1118,19 +1157,20 @@
 
   function startSmolder() {
     if (!settings.smolder || phase !== 'writing' || frozen || !hasContent()) return;
+    const { burn: burnMs } = smolderTimes();
     smoldering = true;
-    smolderVeil.style.setProperty('--smolder-dur', SMOLDER_BURN_MS + 'ms');   // veil grows over the whole window
+    smolderVeil.style.setProperty('--smolder-dur', burnMs + 'ms');   // veil grows over the whole smolder
     stage.classList.add('smoldering');
     smolderTone();
     smolderEmbers();
     smolderEmberTimer = setInterval(smolderEmbers, 560);
-    smolderBurnTimer = setTimeout(() => { coolSmolder(); burn(); }, SMOLDER_BURN_MS);
+    smolderBurnTimer = setTimeout(() => { coolSmolder(); burn(); }, burnMs);
   }
 
   function scheduleSmolder() {
     clearTimeout(smolderWarnTimer);
     if (!settings.smolder || phase !== 'writing' || frozen || !hasContent()) return;
-    smolderWarnTimer = setTimeout(startSmolder, SMOLDER_WARN_MS);
+    smolderWarnTimer = setTimeout(startSmolder, smolderTimes().warn);
   }
 
   function resetSmolder() { coolSmolder(); scheduleSmolder(); }
@@ -1184,7 +1224,7 @@
   function ensureClock() { if (sheetStart === null) sheetStart = Date.now(); }
   function updateMeter() {
     if (settings.wordCount) {
-      const n = (([...locked, current].join(' ')).match(/\S+/g) || []).length;
+      const n = ((locked.slice(userFloor).join(' ') + ' ' + current).match(/\S+/g) || []).length;
       meterWords.textContent = n === 1 ? '1 word' : n + ' words';
     } else meterWords.textContent = '';
     if (settings.timer && sheetStart) {

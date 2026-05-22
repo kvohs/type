@@ -59,6 +59,27 @@
   body.amber .intro,
   body.amber .stamp .date { text-shadow: 0 0 6px rgba(255,176,0,.35); }
 
+  body.dispatch {              /* WWII field dispatch — typed on aged buff teletype paper */
+    --paper: #d8cba9;
+    --ink: #2a2418;            /* faded ribbon black, warm */
+    --ink-soft: #463d2a;
+    --ink-quiet: #7a6e52;
+    --ink-faint: #a99a76;
+    --rule: #b7a983;
+    --panel: #e0d4b4;
+    --panel-shadow: rgba(60,48,24,.45);
+    --sw-off: #b7a983;
+    --emboss: rgba(255,250,235,.6);
+    --ember: #9c4a2c;
+    --accent: #9c3a2a;         /* classified-stamp red */
+    /* uneven aging that darkens toward the edges */
+    background-image: radial-gradient(125% 100% at 50% 0%, rgba(0,0,0,0) 56%, rgba(74,56,28,.14) 100%);
+  }
+  /* slightly heavy, imperfect ink to read like a struck ribbon */
+  body.dispatch .feed,
+  body.dispatch .intro,
+  body.dispatch .stamp .date { text-shadow: 0 .5px 0 rgba(42,36,24,.28); }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body {
@@ -306,6 +327,7 @@
     <div class="settings-title">settings</div>
     <label class="setrow"><span>Dark mode</span><input type="checkbox" id="setDark" /><span class="sw"></span></label>
     <label class="setrow"><span>Amber</span><input type="checkbox" id="setAmber" /><span class="sw"></span></label>
+    <label class="setrow"><span>Dispatch</span><input type="checkbox" id="setDispatch" /><span class="sw"></span></label>
     <div class="setdiv"></div>
     <label class="setrow"><span>Zen mode</span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
     <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top</span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
@@ -342,24 +364,25 @@
   const settingsEl = document.getElementById('settings');
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, zen: false, onTop: false, smolder: false, sound: true, clicks: true, carriage: true, bell: true, quoteStartup: false, quoteBurn: false, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: false, sound: true, clicks: true, carriage: true, bell: true, quoteStartup: false, quoteBurn: false, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
+  const THEMES = ['dark', 'amber', 'dispatch'];
   const applyTheme = () => {
-    document.body.classList.toggle('amber', !!settings.amber);
-    document.body.classList.toggle('dark', !!settings.dark && !settings.amber);
+    THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { dark: document.getElementById('setDark'), amber: document.getElementById('setAmber'), zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteStartup: document.getElementById('setQuoteStartup'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { dark: document.getElementById('setDark'), amber: document.getElementById('setAmber'), dispatch: document.getElementById('setDispatch'), zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteStartup: document.getElementById('setQuoteStartup'), quoteBurn: document.getElementById('setQuoteBurn') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
       settings[k] = boxes[k].checked;
-      // dark and amber are mutually exclusive themes
-      if (k === 'dark' && settings.dark)  { settings.amber = false; boxes.amber.checked = false; }
-      if (k === 'amber' && settings.amber) { settings.dark = false;  boxes.dark.checked  = false; }
+      // the themes are mutually exclusive — turning one on clears the others
+      if (THEMES.includes(k) && settings[k]) {
+        THEMES.filter(t => t !== k).forEach(t => { settings[t] = false; boxes[t].checked = false; });
+      }
       saveSettings();
-      if (k === 'dark' || k === 'amber') applyTheme();
+      if (THEMES.includes(k)) applyTheme();
       if (k === 'zen')   applyZen();
       if (k === 'onTop') applyOnTop();
       if (k === 'smolder') { if (settings.smolder) scheduleSmolder(); else coolSmolder(); }

@@ -8,7 +8,7 @@ There is no cursor to scroll back to, no edit history, no autosave nagging at yo
 
 Open settings with **Cmd+,**. Alongside the sound options you can turn on:
 
-- **Dark mode / Amber** — light, soft dark, or an amber phosphor (CRT) look. Dark and Amber are mutually exclusive.
+- **Theme** — light (default), soft **Dark**, **Amber** phosphor (CRT), or **Dispatch** (a WWII field-message look: buff teletype paper, faded ribbon ink, a classified-stamp red accent). The four are mutually exclusive.
 - **Zen mode** — go fullscreen, edge to edge. Just you and the page.
 - **Stay on top** — keep the window above everything else (desktop app only).
 - **Burn if I stop** — opt-in. Sit idle with words on the page and a warm glow creeps in from the edges; keep sitting and the whole sheet burns itself. Any keystroke cools it back down. Off by default — only catches fire if you ask it to.

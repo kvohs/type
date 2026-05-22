@@ -317,12 +317,31 @@
     color: var(--accent);
   }
   .info {
+    position: relative;
     display: inline-flex; align-items: center; justify-content: center;
     width: 13px; height: 13px; margin-left: 5px; vertical-align: middle;
     border: 1px solid var(--ink-faint); border-radius: 50%;
     font-size: 9px; font-weight: 700; font-style: italic; line-height: 1;
     color: var(--ink-quiet); cursor: help; text-transform: none; letter-spacing: 0;
   }
+  .info .tip {
+    position: absolute; left: 50%; bottom: calc(100% + 9px);
+    transform: translateX(-50%) translateY(4px);
+    width: 208px; padding: 10px 12px;
+    background: var(--panel); color: var(--ink-soft);
+    border: 1px solid var(--rule); border-radius: 10px;
+    box-shadow: 0 14px 30px -14px var(--panel-shadow);
+    font-size: 11.5px; font-weight: 400; font-style: normal; line-height: 1.55;
+    letter-spacing: normal; text-transform: none; text-align: left; white-space: normal;
+    opacity: 0; pointer-events: none;
+    transition: opacity .16s ease, transform .16s ease;
+    z-index: 20;
+  }
+  .info .tip::after {                 /* little caret pointing down at the mark */
+    content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: var(--panel);
+  }
+  .info:hover .tip, .info:focus .tip { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -364,7 +383,7 @@
     <div class="settings-title">quotes</div>
     <label class="setrow"><span>On burn</span><input type="checkbox" id="setQuoteBurn" /><span class="sw"></span></label>
     <div class="setdiv" id="saveDiv" hidden></div>
-    <div class="settings-title" id="saveTitle" hidden>save as .md to <span class="info" title="Point this at your Obsidian vault (or any notes folder) and kept pages land straight in your notes — plain Markdown, no import step.">i</span></div>
+    <div class="settings-title" id="saveTitle" hidden>save as .md to <span class="info" tabindex="0">i<span class="tip">Point this at your Obsidian vault — or any notes folder — and kept pages land straight in your notes. Plain Markdown, no import step.</span></span></div>
     <div class="setrow setrow-btn" id="rowSaveFolder" hidden>
       <span class="setval" id="saveFolderLabel">Downloads</span>
       <span class="setpick">choose…</span>

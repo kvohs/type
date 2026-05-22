@@ -279,6 +279,16 @@
   }
   .meter span:empty { display: none; }
 
+  /* small grey × to the right of a seeded quote — click to remove it */
+  .quote-x {
+    position: fixed; z-index: 9; display: none;
+    width: 18px; height: 18px; line-height: 17px; text-align: center;
+    font-family: var(--mono); font-size: 15px; color: var(--ink-faint);
+    cursor: pointer; opacity: .55; user-select: none;
+    transition: color .15s ease, opacity .15s ease;
+  }
+  .quote-x:hover { color: var(--ink-quiet); opacity: 1; }
+
   .smolder-warn {
     position: fixed; left: 0; right: 0; top: 40px; z-index: 7;
     text-align: center; pointer-events: none; user-select: none;
@@ -374,6 +384,7 @@
     <div class="smolder-veil" id="smolderVeil"></div>
     <div class="smolder-warn" id="smolderWarn" aria-hidden="true">keep typing or this burns</div>
     <div class="meter" id="meter" aria-hidden="true"><span id="meterWords"></span><span id="meterTime"></span></div>
+    <div class="quote-x" id="quoteX" title="remove the quote" aria-hidden="true">&#215;</div>
   </div>
 
   <div class="hints dim" id="hints">
@@ -432,6 +443,7 @@
   const settingsEl = document.getElementById('settings');
   const meterWords = document.getElementById('meterWords');
   const meterTime  = document.getElementById('meterTime');
+  const quoteX = document.getElementById('quoteX');
 
   /* ================= SETTINGS ================= */
   const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: true, onTop: false, smolder: true, smolderSecs: 10, wordCount: true, timer: true, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
@@ -555,6 +567,7 @@
   let quoteHold = null;            // when a quote is seeded, holds it in place until you've written under it
   let sheetStart = null;           // when the current sheet's writing began (for the timer)
   let userFloor = 0;               // index in locked where your own writing starts (seeded quote excluded from word count)
+  let quoteShown = false;          // a seeded quote is currently on the page (removable via the ×)
   const QUOTE_HOLD_ROWS = 3;       // lines you can type beneath a quote before it starts rolling up
 
   /* ================= SOUND ================= */
@@ -825,6 +838,8 @@
       quoteCommitSilent();                    // gap, then you write on a fresh line
       quoteHold = { floor: locked.length };   // keep the quote in place until you've written under it
       userFloor = locked.length;              // your writing starts here — the quote doesn't count
+      for (let i = 0; i < userFloor && i < feed.children.length; i++) feed.children[i].classList.add('quoteline');
+      quoteShown = true;                      // show the remove-× to the right of the quote
       layout();
       quotePlaying = false; quoteSkip = null;
     };
@@ -995,6 +1010,7 @@
       else { offset = 0; quoteHold = null; }        // done — ordinary centered writing
     }
     feed.style.transform = `translateY(${-(locked.length - offset) * lh}px)`;
+    positionQuoteX();
   }
 
   function commitLine() {
@@ -1017,6 +1033,7 @@
     quoteHold = null;
     sheetStart = null;
     userFloor = 0;
+    quoteShown = false;
     coolSmolder();
     clearDraft();
     feed.innerHTML = '';
@@ -1274,6 +1291,32 @@
     } else meterTime.textContent = '';
   }
   setInterval(updateMeter, 1000);
+
+  /* ================= QUOTE REMOVE (×) ================= */
+  function positionQuoteX() {
+    if (!quoteShown) { quoteX.style.display = 'none'; return; }
+    const ql = feed.querySelector('.quoteline');
+    if (!ql) { quoteX.style.display = 'none'; return; }
+    const r = ql.getBoundingClientRect();
+    const fr = feed.getBoundingClientRect();
+    quoteX.style.display = 'block';
+    quoteX.style.left = (fr.right + 12) + 'px';
+    quoteX.style.top  = (r.top + 3) + 'px';
+  }
+  function removeQuote() {
+    if (!quoteShown || userFloor <= 0) return;
+    const n = userFloor;
+    locked.splice(0, n);
+    for (let i = 0; i < n && feed.firstChild; i++) feed.removeChild(feed.firstChild);
+    userFloor = 0;
+    quoteHold = null;
+    quoteShown = false;
+    quoteX.style.display = 'none';
+    layout();
+    persistDraft();
+    updateMeter();
+  }
+  quoteX.addEventListener('click', removeQuote);
 
   /* ================= HINTS ================= */
   // inverted: typing hides the controls (just thoughts); a pause brings them back.

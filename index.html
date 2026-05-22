@@ -40,24 +40,24 @@
     --emboss: rgba(0,0,0,.45);
   }
 
-  body.amber {                 /* phosphor — amber CRT on near-black */
-    --paper: #17120a;
-    --ink: #ffb000;
-    --ink-soft: #d99500;
-    --ink-quiet: #9a6a14;
-    --ink-faint: #4a350f;
-    --rule: #3a2a0d;
-    --panel: #1f1809;
+  body.amber {                 /* phosphor — a muted amber CRT, not neon */
+    --paper: #161009;
+    --ink: #d69a4a;
+    --ink-soft: #b37e3a;
+    --ink-quiet: #835f30;
+    --ink-faint: #463210;
+    --rule: #352712;
+    --panel: #1c1509;
     --panel-shadow: rgba(0,0,0,.6);
-    --sw-off: #3a2a0d;
+    --sw-off: #352712;
     --emboss: rgba(0,0,0,.45);
-    --ember: #ff7a18;
-    --accent: #ff9000;
+    --ember: #cf6d28;
+    --accent: #d9883a;
   }
-  /* soft phosphor glow on the type itself */
+  /* faint phosphor warmth, not a glow */
   body.amber .feed,
   body.amber .intro,
-  body.amber .stamp .date { text-shadow: 0 0 6px rgba(255,176,0,.35); }
+  body.amber .stamp .date { text-shadow: 0 0 3px rgba(214,154,74,.18); }
 
   body.dispatch {              /* WWII field dispatch — typed on warm aged parchment */
     --paper: #e7dcc1;          /* warm parchment, not the old olive-khaki */
@@ -373,6 +373,7 @@
     <label class="setrow"><span>Margin bell</span><input type="checkbox" id="setBell" /><span class="sw"></span></label>
     <div class="setdiv"></div>
     <div class="settings-title">quotes</div>
+    <label class="setrow"><span>On startup</span><input type="checkbox" id="setQuoteOpen" /><span class="sw"></span></label>
     <label class="setrow"><span>On burn</span><input type="checkbox" id="setQuoteBurn" /><span class="sw"></span></label>
     <div class="setdiv" id="saveDiv" hidden></div>
     <div class="settings-title" id="saveTitle" hidden>save as .md to <span class="info" tabindex="0">i<span class="tip">Point this at your Obsidian vault — or any notes folder — and kept pages land straight in your notes. Plain Markdown, no import step.</span></span></div>
@@ -401,7 +402,7 @@
   const settingsEl = document.getElementById('settings');
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: false, sound: true, clicks: true, carriage: true, bell: true, quoteBurn: false, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: false, sound: true, clicks: true, carriage: true, bell: true, quoteOpen: true, quoteBurn: false, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -409,7 +410,7 @@
   const applyTheme = () => {
     THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { dark: document.getElementById('setDark'), amber: document.getElementById('setAmber'), dispatch: document.getElementById('setDispatch'), zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { dark: document.getElementById('setDark'), amber: document.getElementById('setAmber'), dispatch: document.getElementById('setDispatch'), zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
@@ -478,7 +479,7 @@
     introTimers.forEach(clearTimeout); introTimers = [];
     newSheet();
     phase = 'writing';
-    introTimers.push(setTimeout(() => seedWelcome(() => seedQuote(OPENER)), 220));
+    introTimers.push(setTimeout(() => seedWelcome(settings.quoteOpen ? () => seedQuote(OPENER) : null), 220));
   }
   rowReplay.addEventListener('click', replayIntro);
 
@@ -715,8 +716,8 @@
       if (!activeEl.querySelector('.caret')) activeEl.appendChild(caretEl());
       phase = 'writing';
       hints.classList.remove('dim');     // idle at the start → controls visible
-      if (!seenWelcome()) { markWelcomed(); introTimers.push(setTimeout(() => seedWelcome(() => seedQuote(OPENER)), 360)); }
-      else introTimers.push(setTimeout(() => seedQuote(OPENER), 360));   // fixed opener, every launch
+      if (!seenWelcome()) { markWelcomed(); introTimers.push(setTimeout(() => seedWelcome(settings.quoteOpen ? () => seedQuote(OPENER) : null), 360)); }
+      else if (settings.quoteOpen) introTimers.push(setTimeout(() => seedQuote(OPENER), 360));   // fixed opener, every launch
     }, t));
   }
 
@@ -826,11 +827,14 @@
       accentPeriod = false;
       quotePlaying = false; quoteSkip = null;
       if (chain && onDone) {
-        // played through → after a beat, roll the whole thing off and bring the quote
-        // in on a fresh sheet — unless you've started typing in the meantime
+        // played through → after a beat, drop one blank line and let the quote roll in
+        // as the next line. It holds in place like any quote. Unless you've started typing.
         const floorNow = locked.length;
         timers.push(setTimeout(() => {
-          if (!frozen && !quotePlaying && locked.length === floorNow && current === '') rollAwayWelcome(onDone);
+          if (!frozen && !quotePlaying && locked.length === floorNow && current === '') {
+            current = ''; quoteCommitSilent();   // a blank line of breathing room
+            onDone();
+          }
         }, 850));
       } else {
         quoteHold = { floor: locked.length };   // skipped → hold the instructions, start writing
@@ -852,14 +856,6 @@
       finish(false);
     };
     typeLine(0);
-  }
-
-  // roll the welcome up and off, clear to a fresh sheet, then run the callback (the quote)
-  function rollAwayWelcome(cb) {
-    const c = feed.querySelector('.caret'); if (c) c.remove();
-    feed.classList.add('eject');
-    requestAnimationFrame(() => { feed.style.transform = 'translateY(-150vh)'; });
-    setTimeout(() => { newSheet(); accentPeriod = false; if (cb && !frozen) cb(); }, 680);
   }
 
   function skipIntro() {

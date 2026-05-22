@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>type — burn playground</title>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#ffffff; --ink:#121316; --ink-quiet:#7c7f86;
+    --ember:#b05f4a; --accent:#df5a26;
+    --mono:"Courier Prime","Courier New",ui-monospace,monospace;
+    --type-size:19px; --line:calc(var(--type-size)*2.05);
+  }
+  body.dark{ --paper:#141519; --ink:#e7e8ea; --ink-quiet:#888b92; }
+  body.amber{ --paper:#161009; --ink:#d69a4a; --ink-quiet:#835f30; --ember:#cf6d28; --accent:#d9883a; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper); color:var(--ink); font-family:var(--mono);
+    overflow:hidden; transition:background-color .35s ease,color .35s ease;
+    -webkit-font-smoothing:antialiased;
+  }
+  body.amber .page{ text-shadow:0 0 3px rgba(214,154,74,.18); }
+  .stage{ position:relative; width:100%; height:100%; }
+  .page{
+    position:absolute; left:50%; top:46%; transform:translate(-50%,-50%);
+    width:min(60ch,86vw); font-size:var(--type-size); line-height:var(--line);
+  }
+  .line{ white-space:pre-wrap; word-break:break-word; min-height:var(--line); }
+  .ch{ display:inline-block; will-change:transform,opacity,filter,color; }
+
+  /* ---- A: ash drift (the current one) ---- */
+  .ash{ animation:ash 1100ms ease-in forwards; animation-delay:var(--d,0ms); transform-origin:50% 70%; }
+  @keyframes ash{
+    0%{ color:var(--ink); filter:blur(0); opacity:1; transform:translate(0,0) rotate(0); text-shadow:none; }
+    26%{ color:var(--ember); text-shadow:0 0 9px rgba(176,95,74,.5); }
+    100%{ color:rgba(128,128,128,0); filter:blur(1.8px); opacity:0; transform:translate(var(--x),var(--y)) rotate(var(--r)); }
+  }
+
+  /* ---- B: ember sweep (flame front rises from the bottom) ---- */
+  .sweep{ animation:sweep 900ms ease-in forwards; animation-delay:var(--d,0ms); }
+  @keyframes sweep{
+    0%{ color:var(--ink); }
+    28%{ color:#fff; text-shadow:0 0 9px #ffb066,0 0 18px var(--accent); }
+    52%{ color:var(--accent); text-shadow:0 0 12px rgba(223,90,38,.85); }
+    100%{ color:rgba(30,16,10,0); transform:translateY(var(--y)) rotate(var(--r)); filter:blur(2px); opacity:0; }
+  }
+
+  /* ---- C: scatter (blown apart into embers) ---- */
+  .scatter{ animation:scatter 1200ms cubic-bezier(.3,.1,.2,1) forwards; animation-delay:var(--d,0ms); }
+  @keyframes scatter{
+    0%{ color:var(--ink); opacity:1; transform:translate(0,0) rotate(0) scale(1); }
+    18%{ color:var(--ember); text-shadow:0 0 10px rgba(176,95,74,.6); }
+    100%{ color:rgba(128,128,128,0); opacity:0; transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.35); filter:blur(2.4px); }
+  }
+
+  /* ---- D: char & smolder (darkens in place, heavy smoke) ---- */
+  .char{ animation:charburn 1700ms ease-in forwards; animation-delay:var(--d,0ms); }
+  @keyframes charburn{
+    0%{ color:var(--ink); }
+    34%{ color:var(--ember); text-shadow:0 0 8px rgba(176,95,74,.5); }
+    66%{ color:#2a1a12; text-shadow:none; }
+    100%{ color:rgba(20,12,8,0); filter:blur(1.3px); opacity:0; transform:translateY(-7px); }
+  }
+
+  /* ---- E: flash (bright pop, then gone) ---- */
+  .flash{ animation:flashburn 760ms ease-out forwards; animation-delay:var(--d,0ms); }
+  @keyframes flashburn{
+    0%{ color:var(--ink); }
+    14%{ color:#fff; text-shadow:0 0 14px #fff,0 0 26px var(--accent); }
+    44%{ color:var(--accent); }
+    100%{ color:rgba(255,255,255,0); filter:blur(3px); opacity:0; transform:translate(var(--x),var(--y)) scale(1.04); }
+  }
+
+  /* particles + atmosphere */
+  .ember{ position:absolute; width:3px; height:3px; border-radius:999px; background:var(--ember);
+    box-shadow:0 0 12px rgba(176,95,74,.65); opacity:0; z-index:6; pointer-events:none; animation:emberRise 900ms ease-out forwards; }
+  @keyframes emberRise{ 0%{opacity:0;transform:translate(0,12px) scale(.4)} 18%{opacity:1} 100%{opacity:0;transform:translate(var(--x),var(--y)) scale(.1)} }
+  .smoke{ position:absolute; width:200px; height:200px; border-radius:50%;
+    background:radial-gradient(circle,rgba(120,120,128,.16),rgba(120,120,128,0) 68%); filter:blur(16px); opacity:0; pointer-events:none; z-index:5; }
+  .smoke.go{ animation:smokeRise 2s ease-out forwards; }
+  @keyframes smokeRise{ 0%{opacity:0;transform:translateY(12px) scale(.55)} 28%{opacity:.85} 100%{opacity:0;transform:translateY(-150px) scale(1.7)} }
+  .glow{ position:absolute; left:0; right:0; height:120px; pointer-events:none; z-index:4; opacity:0;
+    background:radial-gradient(60% 100% at 50% 100%, rgba(223,90,38,.5), rgba(223,90,38,0) 70%); }
+  .screenflash{ position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:8; }
+  .screenflash.go{ animation:sflash 480ms ease-out forwards; }
+  @keyframes sflash{ 0%{opacity:0} 10%{opacity:.5} 100%{opacity:0} }
+
+  /* controls */
+  .bar{ position:fixed; left:0; right:0; bottom:0; z-index:20; display:flex; flex-wrap:wrap; gap:8px;
+    justify-content:center; align-items:center; padding:14px; background:rgba(127,127,127,.06);
+    backdrop-filter:blur(6px); border-top:1px solid rgba(127,127,127,.18); }
+  .bar button{ font-family:var(--mono); font-size:12px; letter-spacing:.06em; padding:8px 13px; cursor:pointer;
+    border:1px solid var(--ink-quiet); border-radius:8px; background:transparent; color:var(--ink); transition:.15s; }
+  .bar button:hover{ border-color:var(--accent); color:var(--accent); }
+  .bar .sep{ width:1px; height:22px; background:rgba(127,127,127,.3); margin:0 4px; }
+  .bar .lbl{ font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-quiet); margin-right:2px; }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="page" id="page"></div>
+    <div class="screenflash" id="screenflash"></div>
+  </div>
+
+  <div class="bar">
+    <span class="lbl">burn</span>
+    <button data-burn="ash">A · ash drift</button>
+    <button data-burn="sweep">B · ember sweep</button>
+    <button data-burn="scatter">C · scatter</button>
+    <button data-burn="char">D · char &amp; smolder</button>
+    <button data-burn="flash">E · flash</button>
+    <span class="sep"></span>
+    <button id="reset">↻ reset</button>
+    <span class="sep"></span>
+    <span class="lbl">theme</span>
+    <button data-theme="">light</button>
+    <button data-theme="dark">dark</button>
+    <button data-theme="amber">amber</button>
+  </div>
+
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const page  = document.getElementById('page');
+  const screenflash = document.getElementById('screenflash');
+  const SAMPLE = [
+    "The cursor blinks at the left margin.",
+    "You write the thing you have been avoiding,",
+    "one line at a time, no going back.",
+    "When it is done you keep it, or you burn it",
+    "and walk away a little lighter."
+  ];
+  let busy = false;
+
+  function render(){
+    page.innerHTML = '';
+    for (const ln of SAMPLE){
+      const d = document.createElement('div'); d.className = 'line';
+      for (const c of ln){ const s = document.createElement('span'); s.className='ch'; s.textContent = c; d.appendChild(s); }
+      page.appendChild(d);
+    }
+  }
+
+  const rand = (a,b)=> a + Math.random()*(b-a);
+
+  function embers(n){
+    const r = page.getBoundingClientRect();
+    for (let i=0;i<n;i++){
+      const e=document.createElement('span'); e.className='ember';
+      e.style.left=(r.left + rand(0,r.width))+'px';
+      e.style.top =(r.top + rand(0,r.height))+'px';
+      e.style.setProperty('--x', rand(-50,50).toFixed(1)+'px');
+      e.style.setProperty('--y', rand(-120,-40).toFixed(1)+'px');
+      e.style.animationDelay = rand(0,500)+'ms';
+      stage.appendChild(e); setTimeout(()=>e.remove(),1500);
+    }
+  }
+  function smoke(n){
+    const r = page.getBoundingClientRect();
+    for (let i=0;i<n;i++){
+      const s=document.createElement('div'); s.className='smoke';
+      s.style.left=(r.left + rand(.15,.6)*r.width)+'px';
+      s.style.top =(r.top + rand(.2,.6)*r.height)+'px';
+      s.style.animationDelay=(i*220)+'ms';
+      stage.appendChild(s); requestAnimationFrame(()=>s.classList.add('go'));
+      setTimeout(()=>s.remove(),2400);
+    }
+  }
+  function glowFront(){
+    const r = page.getBoundingClientRect();
+    const g=document.createElement('div'); g.className='glow';
+    g.style.top=(r.bottom-60)+'px'; stage.appendChild(g);
+    g.animate(
+      [{opacity:0, transform:'translateY(0)'},{opacity:1, offset:.3},{opacity:0, transform:'translateY(-'+(r.height+80)+'px)'}],
+      {duration:900, easing:'ease-in'}
+    );
+    setTimeout(()=>g.remove(),950);
+  }
+
+  function burn(kind){
+    if (busy) return; busy = true;
+    const chars = [...page.querySelectorAll('.ch')];
+    const rect = page.getBoundingClientRect();
+    const maxY = rect.height;
+
+    chars.forEach((s,i)=>{
+      const cr = s.getBoundingClientRect();
+      const y = cr.top - rect.top;     // 0 at top of page, larger toward bottom
+      let delay = 0, life = 1100;
+      if (kind==='ash'){
+        delay = Math.min(520, i*3 + rand(0,130));
+        s.style.setProperty('--x', rand(-22,22).toFixed(1)+'px');
+        s.style.setProperty('--y', rand(-78,-24).toFixed(1)+'px');
+        s.style.setProperty('--r', rand(-12,12).toFixed(1)+'deg');
+      } else if (kind==='sweep'){
+        delay = (maxY - y) * 1.6 + rand(0,60);   // bottom ignites first, front rises
+        life = 900;
+        s.style.setProperty('--y', rand(-60,-28).toFixed(1)+'px');
+        s.style.setProperty('--r', rand(-10,10).toFixed(1)+'deg');
+      } else if (kind==='scatter'){
+        delay = rand(0,260); life = 1200;
+        const ang = rand(0,Math.PI*2), dist = rand(60,200);
+        s.style.setProperty('--x', (Math.cos(ang)*dist).toFixed(1)+'px');
+        s.style.setProperty('--y', (Math.sin(ang)*dist - 40).toFixed(1)+'px');
+        s.style.setProperty('--r', rand(-180,180).toFixed(1)+'deg');
+      } else if (kind==='char'){
+        delay = Math.min(700, i*4 + rand(0,160)); life = 1700;
+      } else if (kind==='flash'){
+        delay = rand(0,120); life = 760;
+        s.style.setProperty('--x', rand(-30,30).toFixed(1)+'px');
+        s.style.setProperty('--y', rand(-50,-10).toFixed(1)+'px');
+      }
+      s.style.animationDelay = delay+'ms';
+      s.classList.add(kind);
+    });
+
+    // atmosphere per style
+    if (kind==='ash'){ embers(40); setTimeout(()=>smoke(3),700); }
+    if (kind==='sweep'){ glowFront(); embers(60); setTimeout(()=>smoke(3),500); }
+    if (kind==='scatter'){ embers(80); setTimeout(()=>smoke(2),400); }
+    if (kind==='char'){ embers(24); setTimeout(()=>smoke(5),500); }
+    if (kind==='flash'){ screenflash.classList.remove('go'); void screenflash.offsetWidth; screenflash.classList.add('go'); embers(50); }
+
+    setTimeout(()=>{ busy=false; }, 2600);
+  }
+
+  document.querySelectorAll('[data-burn]').forEach(b=> b.addEventListener('click', ()=>{ render(); requestAnimationFrame(()=>burn(b.dataset.burn)); }));
+  document.getElementById('reset').addEventListener('click', render);
+  document.querySelectorAll('[data-theme]').forEach(b=> b.addEventListener('click', ()=>{
+    document.body.classList.remove('dark','amber');
+    if (b.dataset.theme) document.body.classList.add(b.dataset.theme);
+  }));
+
+  render();
+})();
+</script>
+</body>
+</html>

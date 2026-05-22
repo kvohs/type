@@ -142,6 +142,8 @@
   .line.intro-line { white-space: nowrap; }
   .line.attrib { font-size: 12px; letter-spacing: .04em; color: var(--ink-quiet); }
   .line.cr { animation: carriage .24s cubic-bezier(.2,.8,.3,1); }
+  .line.welcome-fade { animation: welcomeFade .7s ease forwards; }
+  @keyframes welcomeFade { to { opacity: 0; } }
   @keyframes carriage {
     0%   { transform: translateX(-11px); }
     65%  { transform: translateX(1.5px); }
@@ -877,8 +879,9 @@
     quotePlaying = true;
     let timers = [];
     let idx = 0;
+    let prevEl = null;
     const CHAR = 45;          // slow, deliberate keystrokes
-    const LINE_PAUSE = 520;   // a clear beat as each punchy line lands and scrolls up
+    const LINE_PAUSE = 520;   // a clear beat after each punchy line
 
     const finish = (chain) => {
       timers.forEach(clearTimeout); timers = [];
@@ -901,10 +904,15 @@
       idx = i;
       if (i > last) { finish(true); return; }
       accentPeriod = (i === last);            // the closing "just type." keeps the burnt-orange period
+      if (prevEl) { prevEl.classList.add('welcome-fade'); prevEl = null; }   // the last line fades as this one begins
       current = '';
       let t = 0;
       for (const ch of lines[i]) { const c = ch; timers.push(setTimeout(() => { current += c; renderActive(); }, t)); t += CHAR; }
-      timers.push(setTimeout(() => { quoteCommitSilent(); typeLine(i + 1); }, t + LINE_PAUSE));
+      timers.push(setTimeout(() => {
+        quoteCommitSilent();
+        prevEl = feed.children[feed.children.length - 2] || null;   // the line just committed
+        typeLine(i + 1);
+      }, t + LINE_PAUSE));
     };
     quoteSkip = () => {
       timers.forEach(clearTimeout); timers = [];

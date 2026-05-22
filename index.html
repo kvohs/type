@@ -80,18 +80,6 @@
   body.dispatch .intro,
   body.dispatch .stamp .date { text-shadow: 0 .5px 0 rgba(42,36,24,.28); }
 
-  /* TOP SECRET//SCI banner — the way real documents mark it: plain mono caps
-     in the top and bottom margins, no box, no rotation. dispatch theme only. */
-  .mark {
-    position: fixed; left: 0; right: 0; z-index: 3;
-    display: none; text-align: center; pointer-events: none; user-select: none;
-    font-family: var(--mono); font-weight: 700; font-size: 12px;
-    letter-spacing: .34em; text-indent: .34em; text-transform: uppercase;
-    color: var(--accent); opacity: .62; mix-blend-mode: multiply;
-  }
-  body.dispatch .mark { display: block; }
-  .mark-top { top: 26px; }
-  .mark-bot { bottom: 54px; }       /* sits just above the keep/burn hints */
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -358,8 +346,6 @@
     <div class="intro" id="intro"></div>
     <div class="stamp" id="stamp"><div class="date" id="stampDate"></div><div class="kept" id="stampKept"></div></div>
     <div class="smolder-veil" id="smolderVeil"></div>
-    <div class="mark mark-top" aria-hidden="true">Top Secret//SCI</div>
-    <div class="mark mark-bot" aria-hidden="true">Top Secret//SCI</div>
   </div>
 
   <div class="hints dim" id="hints">

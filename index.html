@@ -390,7 +390,7 @@
   <div class="hints dim" id="hints">
     <span class="hint"><span class="k">&#8984;S</span><span class="l">keep</span></span>
     <span class="sep"></span>
-    <span class="hint"><span class="k">&#8984;&#9003;</span><span class="l">burn</span></span>
+    <span class="hint"><span class="k">&#8984;B</span><span class="l">burn</span></span>
     <span class="sep"></span>
     <span class="hint hint-btn" id="hintSettings"><span class="k">&#8984;,</span><span class="l">settings</span></span>
   </div>
@@ -1337,7 +1337,15 @@
     if (e.ctrlKey && (e.key === 'm' || e.key === 'M')) { e.preventDefault(); setSound(!settings.sound); return; }
     if (mod && e.key === ',') { e.preventDefault(); toggleSettings(); return; }
     if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); save(); return; }
-    if (mod && (e.key === 'Backspace' || e.key === 'Delete')) { e.preventDefault(); burn(); return; }
+    if (mod && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); burn(); return; }
+    if (mod && (e.key === 'Backspace' || e.key === 'Delete')) {
+      e.preventDefault();
+      if (frozen || phase !== 'writing') return;
+      // ⌘⌫ wipes the current (still-uncommitted) line — committed lines stay locked
+      if (current.length > 0) { current = ''; renderActive(); thock(); }
+      markTyping(); nudgeHints(); resetSmolder(); persistDraft(); updateMeter();
+      return;
+    }
     if (frozen) return;
     if (mod) return;
 
@@ -1356,7 +1364,11 @@
 
     if (e.key === 'Backspace') {
       e.preventDefault();
-      if (current.length > 0) { current = current.slice(0, -1); renderActive(); thock(); }
+      if (current.length > 0) {
+        if (e.altKey) current = current.replace(/\s*\S+\s*$/, '');   // ⌥⌫ — drop the previous word
+        else current = current.slice(0, -1);                          // plain ⌫ — drop one character
+        renderActive(); thock();
+      }
       markTyping(); nudgeHints(); resetSmolder(); persistDraft(); updateMeter();
       return;
     }

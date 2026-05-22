@@ -63,6 +63,10 @@ ipcMain.handle('type:save-note', async (_e, payload) => {
 });
 
 app.whenReady().then(() => {
+  // dev-mode dock icon on macOS — packaged builds use build/icon.icns automatically
+  if (process.platform === 'darwin' && app.dock) {
+    try { app.dock.setIcon(path.join(__dirname, 'build', 'icon-1024.png')); } catch (e) {}
+  }
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

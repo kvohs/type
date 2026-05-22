@@ -468,6 +468,8 @@
   let typeRestTimer = null;
   let introTimers = [];
   let bellRung = false;
+  let quoteHold = null;            // when a quote is seeded, holds it in place until you've written under it
+  const QUOTE_HOLD_ROWS = 3;       // lines you can type beneath a quote before it starts rolling up
 
   /* ================= SOUND ================= */
   let actx = null;
@@ -717,6 +719,8 @@
       quoteCommitSilent();                    // gap between quote and author
       for (const a of attribLines) { current = a; quoteCommitSilent('attrib'); }
       quoteCommitSilent();                    // gap, then you write on a fresh line
+      quoteHold = { floor: locked.length };   // keep the quote in place until you've written under it
+      layout();
       quotePlaying = false; quoteSkip = null;
     };
 
@@ -767,7 +771,19 @@
   // active line is pinned to the strike point (vertical middle); finished lines
   // roll up above it and fade under the veil.
   function layout() {
-    feed.style.transform = `translateY(${-locked.length * LINE_H_PX()}px)`;
+    const lh = LINE_H_PX();
+    // normally the active line is pinned to the strike point (offset 0). after a
+    // quote, freeze the page so your first lines stack beneath it (the quote
+    // stays put), then roll the cursor back to center over the next few lines.
+    let offset = 0;
+    if (quoteHold) {
+      const d = locked.length - quoteHold.floor;   // lines you've committed since the quote
+      const H = QUOTE_HOLD_ROWS;
+      if (d <= H) offset = d;                       // hold: quote frozen, cursor descends
+      else if (d <= 2 * H) offset = 2 * H - d;      // catch up: roll back to the strike point
+      else { offset = 0; quoteHold = null; }        // done — ordinary centered writing
+    }
+    feed.style.transform = `translateY(${-(locked.length - offset) * lh}px)`;
   }
 
   function commitLine() {
@@ -787,6 +803,7 @@
 
   function newSheet() {
     locked = []; current = ''; activeEl = null; bellRung = false;
+    quoteHold = null;
     coolSmolder();
     clearDraft();
     feed.innerHTML = '';

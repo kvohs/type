@@ -883,8 +883,8 @@
   /* ================= SMOLDER (burn if you stop) ================= */
   // Opt-in. Sit idle with words on the page and a warm vignette creeps in; keep
   // sitting and the whole sheet burns itself. Any keystroke cools it back down.
-  const SMOLDER_WARN_MS = 7000;   // idle before the page starts to smolder
-  const SMOLDER_BURN_MS = 7000;   // smolder time before it tips into a full burn
+  const SMOLDER_WARN_MS = 2500;   // grace period before the page starts to smolder
+  const SMOLDER_BURN_MS = 4500;   // smolder, then burn — 7s total from your last keystroke
   const smolderVeil = document.getElementById('smolderVeil');
   let smolderWarnTimer = null, smolderBurnTimer = null, smolderEmberTimer = null;
   let smoldering = false;

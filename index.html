@@ -925,6 +925,8 @@
   // freeze the welcome as a fading ghost, clear to a fresh sheet, then type the quote in
   function fadeWelcomeToQuote(cb) {
     const caret = feed.querySelector('.caret'); if (caret) caret.remove();
+    // freeze already-faded lines at 0 so the clone doesn't replay their fade (the flash)
+    feed.querySelectorAll('.welcome-fade').forEach(el => { el.classList.remove('welcome-fade'); el.style.opacity = '0'; });
     const ghost = feed.cloneNode(true);
     ghost.removeAttribute('id');
     ghost.classList.remove('eject');

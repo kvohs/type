@@ -59,16 +59,16 @@
   body.amber .intro,
   body.amber .stamp .date { text-shadow: 0 0 6px rgba(255,176,0,.35); }
 
-  body.dispatch {              /* WWII field dispatch — typed on aged buff teletype paper */
-    --paper: #d8cba9;
+  body.dispatch {              /* WWII field dispatch — typed on warm aged parchment */
+    --paper: #e7dcc1;          /* warm parchment, not the old olive-khaki */
     --ink: #2a2418;            /* faded ribbon black, warm */
     --ink-soft: #463d2a;
     --ink-quiet: #7a6e52;
-    --ink-faint: #a99a76;
-    --rule: #b7a983;
-    --panel: #e0d4b4;
-    --panel-shadow: rgba(60,48,24,.45);
-    --sw-off: #b7a983;
+    --ink-faint: #ad9f7c;
+    --rule: #cdc09c;
+    --panel: #f1e8d0;
+    --panel-shadow: rgba(60,48,24,.4);
+    --sw-off: #cdc09c;
     --emboss: rgba(255,250,235,.6);
     --ember: #9c4a2c;
     --accent: #9c3a2a;         /* classified-stamp red */
@@ -80,27 +80,18 @@
   body.dispatch .intro,
   body.dispatch .stamp .date { text-shadow: 0 .5px 0 rgba(42,36,24,.28); }
 
-  /* TOP SECRET // SCI rubber stamp — only in the dispatch theme */
-  .classified {
-    position: fixed; bottom: 9%; left: 6%; z-index: 3;
-    display: none; pointer-events: none; user-select: none;
-    flex-direction: column; align-items: center; gap: 3px;
-    font-family: var(--mono); text-transform: uppercase; text-align: center;
-    color: var(--accent);
-    border: 4px double var(--accent);         /* the double rule reads as a rubber-stamp frame */
-    border-radius: 4px;
-    padding: 9px 18px 7px;
-    transform: rotate(-11deg);
-    opacity: .42; mix-blend-mode: multiply;    /* darkens into the paper like real ink */
+  /* TOP SECRET//SCI banner — the way real documents mark it: plain mono caps
+     in the top and bottom margins, no box, no rotation. dispatch theme only. */
+  .mark {
+    position: fixed; left: 0; right: 0; z-index: 3;
+    display: none; text-align: center; pointer-events: none; user-select: none;
+    font-family: var(--mono); font-weight: 700; font-size: 12px;
+    letter-spacing: .34em; text-indent: .34em; text-transform: uppercase;
+    color: var(--accent); opacity: .62; mix-blend-mode: multiply;
   }
-  body.dispatch .classified { display: flex; }
-  .classified .cl-band {
-    font-weight: 700; font-size: 27px; letter-spacing: .14em; line-height: 1;
-    text-shadow: .6px .6px 0 var(--accent);    /* slight ink doubling — a struck-stamp feel */
-  }
-  .classified .cl-sub {
-    font-weight: 700; font-size: 12px; letter-spacing: .46em; text-indent: .46em; opacity: .92;
-  }
+  body.dispatch .mark { display: block; }
+  .mark-top { top: 26px; }
+  .mark-bot { bottom: 54px; }       /* sits just above the keep/burn hints */
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -335,7 +326,8 @@
     <div class="intro" id="intro"></div>
     <div class="stamp" id="stamp"><div class="date" id="stampDate"></div><div class="kept" id="stampKept"></div></div>
     <div class="smolder-veil" id="smolderVeil"></div>
-    <div class="classified" aria-hidden="true"><span class="cl-band">Top Secret</span><span class="cl-sub">// SCI</span></div>
+    <div class="mark mark-top" aria-hidden="true">Top Secret//SCI</div>
+    <div class="mark mark-bot" aria-hidden="true">Top Secret//SCI</div>
   </div>
 
   <div class="hints dim" id="hints">

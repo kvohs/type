@@ -716,7 +716,6 @@
     // the author is a quiet caption, not typed — it just settles in under the quote
     const placeAttributionAndEnd = () => {
       timers.forEach(clearTimeout); timers = [];
-      quoteCommitSilent();                    // gap between quote and author
       for (const a of attribLines) { current = a; quoteCommitSilent('attrib'); }
       quoteCommitSilent();                    // gap, then you write on a fresh line
       quoteHold = { floor: locked.length };   // keep the quote in place until you've written under it

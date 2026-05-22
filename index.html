@@ -517,6 +517,7 @@
   let typeRestTimer = null;
   let introTimers = [];
   let bellRung = false;
+  let accentPeriod = false;        // colors a line's trailing period (the "type." burnt-orange dot)
   let quoteHold = null;            // when a quote is seeded, holds it in place until you've written under it
   const QUOTE_HOLD_ROWS = 3;       // lines you can type beneath a quote before it starts rolling up
 
@@ -642,6 +643,19 @@
     c.className = 'caret';
     return c;
   }
+  // render text into an element; when accent is on, the final period is burnt orange (like "type.")
+  function renderInto(el, text, accent) {
+    el.textContent = '';
+    const n = text.length;
+    for (let k = 0; k < n; k++) {
+      if (accent && text[k] === '.' && k === n - 1) {
+        const p = document.createElement('span'); p.className = 'ch period'; p.textContent = '.';
+        el.appendChild(p);
+      } else {
+        el.appendChild(inkSpan(text[k]));
+      }
+    }
+  }
 
   function markTyping() {
     stage.classList.add('typing');
@@ -701,21 +715,22 @@
       }, t));
       t += 110;
     }
-    // slide the cursor all the way to the left-hand side
+    // once it's deleted, the cursor rests a moment, then vanishes in place
     introTimers.push(setTimeout(() => {
-      activeEl.style.transition = 'transform .5s cubic-bezier(.4,0,.2,1)';
-      activeEl.style.transform = 'translateX(0)';
+      const c = activeEl.querySelector('.caret'); if (c) c.remove();
     }, t));
-    t += 540;
-    // stay at the left, ready to type
+    t += 420;
+    // ...and reappears at the left margin, where typing begins (no distracting slide)
     introTimers.push(setTimeout(() => {
       if (phase !== 'intro') return;
       activeEl.style.transition = '';
+      activeEl.style.transform = 'translateX(0)';
       activeEl.classList.remove('intro-line');
+      if (!activeEl.querySelector('.caret')) activeEl.appendChild(caretEl());
       phase = 'writing';
       hints.classList.remove('dim');     // idle at the start → controls visible
-      if (!seenWelcome()) { markWelcomed(); introTimers.push(setTimeout(() => seedWelcome(() => seedQuote(OPENER)), 320)); }
-      else introTimers.push(setTimeout(() => seedQuote(OPENER), 320));   // fixed opener, every launch
+      if (!seenWelcome()) { markWelcomed(); introTimers.push(setTimeout(() => seedWelcome(() => seedQuote(OPENER)), 360)); }
+      else introTimers.push(setTimeout(() => seedQuote(OPENER), 360));   // fixed opener, every launch
     }, t));
   }
 
@@ -744,8 +759,7 @@
     if (activeEl) {
       activeEl.classList.remove('cr');
       if (cls) activeEl.classList.add(cls);
-      activeEl.textContent = '';
-      for (const c of current) activeEl.appendChild(inkSpan(c));
+      renderInto(activeEl, current, accentPeriod);
     }
     locked.push(current);
     current = '';
@@ -760,6 +774,7 @@
     if (phase !== 'writing' || quotePlaying) return;
     const q = forced || (list && list.length ? list[Math.floor(Math.random() * list.length)] : null);
     if (!q) return;
+    accentPeriod = false;
     const bodyLines = wrapText(q.text, MAX_COLS);          // typed out, full size
     const attribLines = wrapText('— ' + (q.author || 'Unknown'), MAX_COLS);  // author only
     quotePlaying = true;
@@ -798,8 +813,10 @@
   // Types a short note in the app's own voice the very first time someone
   // opens it, then rolls away as they write — or they burn it. Never repeats.
   const WELCOME = [
-    "A place to just write. No editing allowed. Just get it out — a journal entry, a blog post, a chapter of your next novel.",
-    "⌘S saves it as a Markdown file. Point it at your Obsidian vault, or anywhere on your computer. Or burn it (⌘⌫), and it's gone.",
+    "This is a place to just write.",
+    "No editing. You can't go back and fix things, so don't try. Just get the thought out.",
+    "Write whatever you want. A journal entry, a blog post, the first page of your novel.",
+    "When you finish, keep it and it saves as a Markdown file you can put anywhere. Or burn it, and it's gone.",
     "Just type."
   ];
   const seenWelcome = () => { try { return localStorage.getItem('type.welcomed') === '1'; } catch (e) { return true; } };
@@ -809,6 +826,7 @@
     if (phase !== 'writing' || quotePlaying) return;
     const lines = [];   // '' entries mark the deliberate pause between paragraphs
     WELCOME.forEach((p, i) => { if (i) lines.push(''); wrapText(p, MAX_COLS).forEach(l => lines.push(l)); });
+    const last = lines.length - 1;
     quotePlaying = true;
     let timers = [];
     let idx = 0;
@@ -818,14 +836,15 @@
 
     const finish = (chain) => {
       timers.forEach(clearTimeout); timers = [];
+      accentPeriod = false;
       quotePlaying = false; quoteSkip = null;
       if (chain && onDone) {
-        // played through → let the instructions roll up, then bring in the quote,
-        // unless you've already started typing in the meantime
+        // played through → after a beat, roll the whole thing up and bring the quote
+        // in on a fresh sheet — unless you've started typing in the meantime
         const floorNow = locked.length;
         timers.push(setTimeout(() => {
-          if (!frozen && !quotePlaying && locked.length === floorNow && current === '') onDone();
-        }, 900));
+          if (!frozen && !quotePlaying && locked.length === floorNow && current === '') rollAwayWelcome(onDone);
+        }, 700));
       } else {
         quoteHold = { floor: locked.length };   // skipped → hold the instructions, start writing
         layout();
@@ -833,7 +852,8 @@
     };
     const typeLine = (i) => {
       idx = i;
-      if (i >= lines.length) { finish(true); return; }
+      if (i > last) { finish(true); return; }
+      accentPeriod = (i === last);            // the closing "just type." keeps the burnt-orange period
       if (lines[i] === '') {                  // paragraph break: hold, then drop the gap and carry on
         timers.push(setTimeout(() => { current = ''; quoteCommitSilent(); typeLine(i + 1); }, PARA_PAUSE));
         return;
@@ -845,10 +865,18 @@
     };
     quoteSkip = () => {
       timers.forEach(clearTimeout); timers = [];
-      for (let i = idx; i < lines.length; i++) { current = lines[i]; quoteCommitSilent(); }
+      for (let i = idx; i <= last; i++) { accentPeriod = (i === last); current = lines[i]; quoteCommitSilent(); }
       finish(false);
     };
     typeLine(0);
+  }
+
+  // roll the welcome up and off, clear to a fresh sheet, then run the callback (the quote)
+  function rollAwayWelcome(cb) {
+    const c = feed.querySelector('.caret'); if (c) c.remove();
+    feed.classList.add('eject');
+    requestAnimationFrame(() => { feed.style.transform = 'translateY(-150vh)'; });
+    setTimeout(() => { newSheet(); accentPeriod = false; if (cb && !frozen) cb(); }, 680);
   }
 
   function skipIntro() {
@@ -872,8 +900,7 @@
       feed.appendChild(activeEl);
     }
     if (cr) activeEl.classList.add('cr');
-    activeEl.textContent = '';
-    for (const c of current) activeEl.appendChild(inkSpan(c));
+    renderInto(activeEl, current, accentPeriod);
     activeEl.appendChild(caretEl());
   }
 

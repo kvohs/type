@@ -37,6 +37,18 @@ ipcMain.handle('type:pick-folder', async () => {
   return res.filePaths[0];
 });
 
+ipcMain.handle('type:set-zen', (e, on) => {
+  const w = BrowserWindow.fromWebContents(e.sender);
+  if (w) w.setFullScreen(!!on);
+  return true;
+});
+
+ipcMain.handle('type:set-on-top', (e, on) => {
+  const w = BrowserWindow.fromWebContents(e.sender);
+  if (w) w.setAlwaysOnTop(!!on);
+  return true;
+});
+
 ipcMain.handle('type:save-note', async (_e, payload) => {
   try {
     const { content, filename } = payload || {};

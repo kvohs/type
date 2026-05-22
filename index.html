@@ -771,13 +771,7 @@
       }
     } else if (key === 'ArrowDown') {
       if (!cursor) return;
-      if (cursor.line < locked.length - 1) {
-        const prev = cursor.line; cursor.line++;
-        cursor.col = Math.min(cursor.col, locked[cursor.line].length);
-        renderLockedLine(prev); renderLockedLine(cursor.line); layout();
-      } else {
-        exitOverstrike();                              // ↓ off the last locked line returns to ordinary writing
-      }
+      exitOverstrike();                              // ↓ always returns to writing, no matter how far up you went
     } else if (key === 'ArrowLeft') {
       if (!cursor) return;
       const prev = cursor.line;

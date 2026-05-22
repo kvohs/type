@@ -362,7 +362,6 @@
     <label class="setrow"><span>Margin bell</span><input type="checkbox" id="setBell" /><span class="sw"></span></label>
     <div class="setdiv"></div>
     <div class="settings-title">quotes</div>
-    <label class="setrow"><span>On startup</span><input type="checkbox" id="setQuoteStartup" /><span class="sw"></span></label>
     <label class="setrow"><span>On burn</span><input type="checkbox" id="setQuoteBurn" /><span class="sw"></span></label>
     <div class="setdiv" id="saveDiv" hidden></div>
     <div class="settings-title" id="saveTitle" hidden>save as .md to <span class="info" title="Point this at your Obsidian vault (or any notes folder) and kept pages land straight in your notes — plain Markdown, no import step.">i</span></div>
@@ -386,7 +385,7 @@
   const settingsEl = document.getElementById('settings');
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: false, sound: true, clicks: true, carriage: true, bell: true, quoteStartup: false, quoteBurn: false, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: false, sound: true, clicks: true, carriage: true, bell: true, quoteBurn: false, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -394,7 +393,7 @@
   const applyTheme = () => {
     THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { dark: document.getElementById('setDark'), amber: document.getElementById('setAmber'), dispatch: document.getElementById('setDispatch'), zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteStartup: document.getElementById('setQuoteStartup'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { dark: document.getElementById('setDark'), amber: document.getElementById('setAmber'), dispatch: document.getElementById('setDispatch'), zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteBurn: document.getElementById('setQuoteBurn') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
@@ -674,7 +673,7 @@
       phase = 'writing';
       hints.classList.remove('dim');     // idle at the start → controls visible
       if (!seenWelcome()) { markWelcomed(); introTimers.push(setTimeout(seedWelcome, 320)); }
-      else if (settings.quoteStartup) introTimers.push(setTimeout(seedQuote, 320));
+      else introTimers.push(setTimeout(() => seedQuote(OPENER), 320));   // fixed opener, every launch
     }, t));
   }
 
@@ -683,6 +682,8 @@
   // and stays — exactly like the lines you type. You just keep writing beneath it.
   let quotePlaying = false;
   let quoteSkip = null;
+  // the app opens with this every launch (after the first-run welcome)
+  const OPENER = { text: "Most of us have two lives: the life we live, and the unlived life within us. Between the two stands Resistance.", author: "Steven Pressfield", source: "The War of Art" };
 
   function wrapText(text, cols) {
     const out = [];
@@ -712,10 +713,11 @@
     layout();
   }
 
-  function seedQuote() {
+  function seedQuote(forced) {
     const list = window.TYPE_QUOTES;
-    if (!list || !list.length || phase !== 'writing' || quotePlaying) return;
-    const q = list[Math.floor(Math.random() * list.length)];
+    if (phase !== 'writing' || quotePlaying) return;
+    const q = forced || (list && list.length ? list[Math.floor(Math.random() * list.length)] : null);
+    if (!q) return;
     const bodyLines = wrapText(q.text, MAX_COLS);          // typed out, full size
     const attribLines = wrapText('— ' + (q.author || 'Unknown'), MAX_COLS);  // author only
     quotePlaying = true;

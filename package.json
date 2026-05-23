@@ -1,7 +1,7 @@
 {
   "name": "type",
   "productName": "type",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A single sheet of paper. Type, then keep it or burn it.",
   "main": "main.js",
   "author": "Kelly Vohs",

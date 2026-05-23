@@ -283,7 +283,7 @@
     position: fixed; left: 92px; top: 18px; z-index: 9;
     display: flex; gap: 16px; pointer-events: none; user-select: none;
     font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
-    text-transform: uppercase; color: var(--ink-faint);
+    text-transform: uppercase; color: var(--ink-quiet);
   }
   .meter span:empty { display: none; }
 
@@ -404,9 +404,21 @@
     margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule);
     text-align: center; font-family: var(--mono);
     font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
-    color: var(--ink-faint); user-select: none;
+    color: var(--ink-quiet); user-select: none;
   }
   .setversion:empty { display: none; }
+
+  /* live session stats inside the settings panel — visible whenever you
+     open settings, so you can check the word count + writing time without
+     having the on-screen overlay on. updates every second. */
+  .setstats {
+    display: flex; gap: 14px; justify-content: center; margin-bottom: 12px;
+    padding: 8px 0;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--ink-quiet); user-select: none;
+  }
+  .setstats span:empty { display: none; }
+  .setstats:has(> *:empty:nth-child(1)):has(> *:empty:nth-child(2)) { display: none; }
   .info {
     position: relative;
     display: inline-flex; align-items: center; justify-content: center;
@@ -416,9 +428,12 @@
     color: var(--ink-quiet); cursor: help; text-transform: none; letter-spacing: 0;
   }
   .info .tip {
-    position: absolute; left: 50%; bottom: calc(100% + 9px);
-    transform: translateX(-50%) translateY(4px);
-    width: 208px; padding: 10px 12px;
+    /* pops out to the LEFT of the info mark — the settings panel sits at the
+       right edge of the screen, so leftward keeps the tooltip in-frame and
+       doesn't overlap the row above */
+    position: absolute; right: calc(100% + 12px); top: 50%;
+    transform: translateY(-50%) translateX(4px);
+    width: 220px; padding: 10px 12px;
     background: var(--panel); color: var(--ink-soft);
     border: 1px solid var(--rule); border-radius: 10px;
     box-shadow: 0 14px 30px -14px var(--panel-shadow);
@@ -428,11 +443,11 @@
     transition: opacity .16s ease, transform .16s ease;
     z-index: 20;
   }
-  .info .tip::after {                 /* little caret pointing down at the mark */
-    content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
-    border: 5px solid transparent; border-top-color: var(--panel);
+  .info .tip::after {                 /* little caret pointing right at the mark */
+    content: ""; position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
+    border: 5px solid transparent; border-left-color: var(--panel);
   }
-  .info:hover .tip, .info:focus .tip { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .info:hover .tip, .info:focus .tip { opacity: 1; transform: translateY(-50%) translateX(0); }
 </style>
 </head>
 <body>
@@ -468,6 +483,7 @@
 
   <div class="settings" id="settings" hidden>
     <div class="settings-title">settings</div>
+    <div class="setstats" id="setStats" aria-hidden="true"><span id="setStatsWords"></span><span id="setStatsTime"></span></div>
     <label class="setrow"><span>Dark mode</span><input type="checkbox" id="setDark" /><span class="sw"></span></label>
     <label class="setrow"><span>Amber</span><input type="checkbox" id="setAmber" /><span class="sw"></span></label>
     <label class="setrow"><span>Dispatch</span><input type="checkbox" id="setDispatch" /><span class="sw"></span></label>
@@ -524,7 +540,7 @@
   }
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: true, smolderSecs: 10, wordCount: true, timer: true, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: true, smolderSecs: 10, wordCount: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -1554,16 +1570,26 @@
   }
 
   /* ================= METER (word count + timer) ================= */
+  // shows live counts in two places:
+  // - the on-screen overlay (.meter), gated by settings.wordCount + settings.timer
+  // - the settings panel's session-stats line, always visible when settings are open
+  const setStatsWords = document.getElementById('setStatsWords');
+  const setStatsTime  = document.getElementById('setStatsTime');
   function ensureClock() { if (sheetStart === null) sheetStart = Date.now(); }
   function updateMeter() {
-    if (settings.wordCount) {
-      const n = ((locked.slice(userFloor).join(' ') + ' ' + current).match(/\S+/g) || []).length;
-      meterWords.textContent = n === 1 ? '1 word' : n + ' words';
-    } else meterWords.textContent = '';
-    if (settings.timer && sheetStart) {
+    const n = ((locked.slice(userFloor).join(' ') + ' ' + current).match(/\S+/g) || []).length;
+    const wordsText = n === 1 ? '1 word' : n + ' words';
+    let timeText = '';
+    if (sheetStart) {
       const s = Math.max(0, Math.floor((Date.now() - sheetStart) / 1000));
-      meterTime.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-    } else meterTime.textContent = '';
+      timeText = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+    // on-screen overlay obeys the user's toggles
+    meterWords.textContent = settings.wordCount ? wordsText : '';
+    meterTime.textContent  = settings.timer ? timeText : '';
+    // in-settings line is always populated when settings are open
+    setStatsWords.textContent = wordsText;
+    setStatsTime.textContent  = timeText;
   }
   setInterval(updateMeter, 1000);
 
@@ -1769,6 +1795,16 @@
       return;
     }
     if (e.ctrlKey && (e.key === 'm' || e.key === 'M')) { e.preventDefault(); setSound(!settings.sound); return; }
+    // ⌃⌘F toggles Zen — works whether or not the system menu's "Toggle Full
+    // Screen" wires through. main process keeps settings + checkbox in sync.
+    if (e.metaKey && e.ctrlKey && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      settings.zen = !settings.zen;
+      boxes.zen.checked = settings.zen;
+      saveSettings();
+      applyZen();
+      return;
+    }
     if (mod && e.key === ',') { e.preventDefault(); toggleSettings(); return; }
     if (mod && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();

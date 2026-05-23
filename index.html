@@ -454,11 +454,6 @@
       <span class="setval" id="saveFolderLabel">Downloads</span>
       <span class="setpick">choose…</span>
     </div>
-    <div class="setdiv"></div>
-    <div class="setrow setrow-btn" id="rowReplay">
-      <span class="setval">Replay the intro</span>
-      <span class="setpick">play</span>
-    </div>
     <div class="setversion" id="setVersion" aria-hidden="true"></div>
   </div>
 
@@ -565,18 +560,6 @@
   }
   applyOnTop();
   if (settings.zen) applyZen();
-
-  // replay the first-run intro on demand (welcome, then the opening quote) — starts a fresh sheet
-  const rowReplay = document.getElementById('rowReplay');
-  function replayIntro() {
-    settingsEl.hidden = true;
-    if (quotePlaying && quoteSkip) quoteSkip();
-    introTimers.forEach(clearTimeout); introTimers = [];
-    newSheet();
-    phase = 'writing';
-    introTimers.push(setTimeout(() => seedWelcome(settings.quoteOpen ? () => seedQuote(OPENER) : null), 220));
-  }
-  rowReplay.addEventListener('click', replayIntro);
 
   // how long the page waits before burning when you stop (only relevant with "Burn if I stop")
   const burnAfterVal = document.getElementById('burnAfterVal');

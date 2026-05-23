@@ -1,10 +1,16 @@
-const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
 const { version: APP_VERSION } = require('./package.json');
+
+// route electron-updater's output to ~/Library/Logs/type/main.log so we can
+// actually see what happened when "no update arrived" again
+log.transports.file.level = 'info';
+autoUpdater.logger = log;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -114,6 +120,37 @@ ipcMain.handle('type:save-note', async (_e, payload) => {
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
+// when set, the next update-{available,not-available,error} fires a dialog
+// so a manual "Check for Updates…" click always gives the user feedback
+let manualCheckInProgress = false;
+
+autoUpdater.on('update-available', (info) => {
+  if (manualCheckInProgress) {
+    const win = BrowserWindow.getAllWindows()[0];
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Update available',
+      message: `type ${info.version} is downloading.`,
+      detail: 'You’ll be prompted to install when the download finishes.',
+      buttons: ['OK'],
+    }).catch(() => {});
+    manualCheckInProgress = false;
+  }
+});
+
+autoUpdater.on('update-not-available', () => {
+  if (manualCheckInProgress) {
+    const win = BrowserWindow.getAllWindows()[0];
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'You’re up to date',
+      message: `type ${APP_VERSION} is the latest version.`,
+      buttons: ['OK'],
+    }).catch(() => {});
+    manualCheckInProgress = false;
+  }
+});
+
 autoUpdater.on('update-downloaded', (info) => {
   const win = BrowserWindow.getAllWindows()[0];
   dialog.showMessageBox(win, {
@@ -127,11 +164,64 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 autoUpdater.on('error', (err) => {
-  // network hiccup, rate limit, etc. — log but don't bother the user
-  console.log('auto-update check failed:', err && err.message || err);
+  log.error('auto-update error', err);
+  if (manualCheckInProgress) {
+    const win = BrowserWindow.getAllWindows()[0];
+    dialog.showMessageBox(win, {
+      type: 'error',
+      title: 'Update check failed',
+      message: 'Couldn’t check for updates.',
+      detail: String(err && err.message || err),
+      buttons: ['OK'],
+    }).catch(() => {});
+    manualCheckInProgress = false;
+  }
 });
 
+function checkForUpdatesManually() {
+  if (!app.isPackaged) {
+    const win = BrowserWindow.getAllWindows()[0];
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Updates disabled in dev',
+      message: 'Auto-update only runs in packaged builds. Run from a dmg install to test.',
+      buttons: ['OK'],
+    }).catch(() => {});
+    return;
+  }
+  manualCheckInProgress = true;
+  autoUpdater.checkForUpdates().catch((err) => {
+    log.error('manual check failed', err);
+  });
+}
+
+function buildMenu() {
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { label: 'Check for Updates…', click: () => checkForUpdatesManually() },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 app.whenReady().then(() => {
+  buildMenu();
   // dev-mode dock icon on macOS — packaged builds use build/icon.icns automatically
   if (process.platform === 'darwin' && app.dock) {
     try { app.dock.setIcon(path.join(__dirname, 'build', 'icon-1024.png')); } catch (e) {}

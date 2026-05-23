@@ -1338,29 +1338,28 @@
     hintsFeedback.hidden = false;
     newSheet();
     phase = 'writing';
-    // seed the prompt as a single attribution-style line at the top, then
-    // a blank line so the cursor sits right where the user types
+    accentPeriod = false;
+    // seed the prompt using the same path quotes use — quoteCommitSilent
+    // writes `current` into the active line, then creates a fresh active
+    // line for the next thing. avoids duplicating cursor elements.
     const promptLines = wrapText("What's on your mind?", MAX_COLS);
     for (const ln of promptLines) {
-      const el = document.createElement('div');
-      el.className = 'line attrib quoteline';
-      for (const c of ln) el.appendChild(inkSpan(c));
-      feed.appendChild(el);
-      locked.push(ln);
+      current = ln;
+      quoteCommitSilent('attrib');
     }
-    // blank gap so user types on a fresh line below the prompt
-    const blank = document.createElement('div');
-    blank.className = 'line';
-    feed.appendChild(blank);
-    locked.push('');
-    userFloor = locked.length;   // user's writing starts here — prompt doesn't count
-    activeEl = null;
-    renderActive();
+    quoteCommitSilent();    // blank gap line below the prompt
+    userFloor = locked.length;
+    // mark the seeded lines as quotelines so they're styled like quote text
+    for (let i = 0; i < userFloor && i < feed.children.length; i++) {
+      feed.children[i].classList.add('quoteline');
+    }
     layout();
+    // "page paused" stays visible the WHOLE feedback session if there was
+    // writing — fades only when feedback mode exits. this is the visible
+    // promise that the writing isn't lost.
     if (hadContent) {
+      feedbackPaused.textContent = "page paused — back when you're done";
       feedbackPaused.classList.add('show');
-      clearTimeout(feedbackPausedTimer);
-      feedbackPausedTimer = setTimeout(() => feedbackPaused.classList.remove('show'), 4000);
     }
   }
 

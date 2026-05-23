@@ -91,7 +91,7 @@ def build_master():
     ImageDraw.Draw(dot_canvas).ellipse(
         (0, 0, dot_diam * SS - 1, dot_diam * SS - 1), fill=ACCENT
     )
-    dot_small = dot_canvas.resize((dot_diam, dot_diam), Image.LANCZOS)
+    dot_small = dot_canvas.resize((dot_diam, dot_diam), Image.BOX)
     img.paste(
         dot_small,
         (period_cx - dot_diam // 2, int(period_cy - dot_diam / 2)),
@@ -122,7 +122,7 @@ def write_iconset(master):
         if px == SIZE:
             master.save(out, "PNG", optimize=True)
         else:
-            master.resize((px, px), Image.LANCZOS).save(out, "PNG", optimize=True)
+            master.resize((px, px), Image.BOX).save(out, "PNG", optimize=True)
 
 
 def write_icns():

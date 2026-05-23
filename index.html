@@ -287,6 +287,36 @@
   }
   .meter span:empty { display: none; }
 
+  /* ---------- feedback mode ---------- */
+  /* subtle paper tint so the room feels different from normal writing */
+  body.feedback { background-color: color-mix(in srgb, var(--paper) 94%, var(--accent) 6%); }
+  body.dark.feedback { background-color: color-mix(in srgb, var(--paper) 92%, var(--accent) 8%); }
+  body.amber.feedback { background-color: color-mix(in srgb, var(--paper) 92%, var(--accent) 8%); }
+  body.dispatch.feedback { background-color: color-mix(in srgb, var(--paper) 92%, var(--ember) 8%); }
+
+  /* persistent corner label so there's no mistaking what mode you're in */
+  .feedback-label {
+    position: fixed; left: 22px; top: 18px; z-index: 9;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--ink-quiet);
+    pointer-events: none; user-select: none; display: none;
+  }
+  body.feedback .feedback-label { display: block; }
+  /* in feedback mode the meter (word count + timer) hides — it's a writing
+     surface, not a writing session */
+  body.feedback .meter { display: none; }
+
+  /* ephemeral "page paused" toast — only shown if the user had writing when
+     they entered feedback mode. fades after a few seconds. */
+  .feedback-paused {
+    position: fixed; right: 22px; top: 18px; z-index: 10;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--ink-quiet);
+    opacity: 0; pointer-events: none;
+    transition: opacity .35s ease;
+  }
+  .feedback-paused.show { opacity: 1; }
+
   /* small grey × to the right of a seeded quote — click to remove it */
   .quote-x {
     position: fixed; z-index: 9; display: none;
@@ -415,16 +445,25 @@
     <div class="smolder-veil" id="smolderVeil"></div>
     <div class="smolder-warn" id="smolderWarn" aria-hidden="true">keep typing or this burns</div>
     <div class="meter" id="meter" aria-hidden="true"><span id="meterWords"></span><span id="meterTime"></span></div>
+    <div class="feedback-label" id="feedbackLabel" aria-hidden="true">feedback —</div>
+    <div class="feedback-paused" id="feedbackPaused" aria-hidden="true">page paused — back when you're done</div>
     <div class="quote-share" id="quoteShare" title="share as wallpaper" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2"/><path d="M5 5L8 2L11 5"/><path d="M3.5 8V13C3.5 13.5523 3.94772 14 4.5 14H11.5C12.0523 14 12.5 13.5523 12.5 13V8"/></svg></div>
     <div class="quote-x" id="quoteX" title="remove the quote" aria-hidden="true">&#215;</div>
   </div>
 
   <div class="hints dim" id="hints">
-    <span class="hint"><span class="k">&#8984;S</span><span class="l">keep</span></span>
-    <span class="sep"></span>
-    <span class="hint"><span class="k">&#8984;B</span><span class="l">burn</span></span>
-    <span class="sep"></span>
-    <span class="hint hint-btn" id="hintSettings"><span class="k">&#8984;,</span><span class="l">settings</span></span>
+    <span class="hints-group" id="hintsNormal">
+      <span class="hint"><span class="k">&#8984;S</span><span class="l">keep</span></span>
+      <span class="sep"></span>
+      <span class="hint"><span class="k">&#8984;B</span><span class="l">burn</span></span>
+      <span class="sep"></span>
+      <span class="hint hint-btn" id="hintSettings"><span class="k">&#8984;,</span><span class="l">settings</span></span>
+    </span>
+    <span class="hints-group" id="hintsFeedback" hidden>
+      <span class="hint"><span class="k">&#8984;S</span><span class="l">send</span></span>
+      <span class="sep"></span>
+      <span class="hint"><span class="k">esc</span><span class="l">cancel</span></span>
+    </span>
   </div>
 
   <div class="settings" id="settings" hidden>
@@ -453,6 +492,11 @@
     <div class="setrow setrow-btn" id="rowSaveFolder" hidden>
       <span class="setval" id="saveFolderLabel">Downloads</span>
       <span class="setpick">choose…</span>
+    </div>
+    <div class="setdiv"></div>
+    <div class="setrow setrow-btn" id="rowFeedback">
+      <span class="setval">Send feedback</span>
+      <span class="setpick">write</span>
     </div>
     <div class="setversion" id="setVersion" aria-hidden="true"></div>
   </div>
@@ -1261,6 +1305,123 @@
       setTimeout(() => s.remove(), 2300);
     }
   }
+  /* ================= FEEDBACK MODE ================= */
+  // open a writing surface that sends what you type to Kelly. the current
+  // page is stashed in memory (and the existing on-disk draft is left alone
+  // as a safety net), then restored when you send or cancel.
+  let feedbackMode = false;
+  let stashedSheet = null;
+  const feedbackLabel = document.getElementById('feedbackLabel');
+  const feedbackPaused = document.getElementById('feedbackPaused');
+  const hintsNormal = document.getElementById('hintsNormal');
+  const hintsFeedback = document.getElementById('hintsFeedback');
+  const rowFeedback = document.getElementById('rowFeedback');
+  let feedbackPausedTimer = null;
+
+  function enterFeedbackMode() {
+    if (feedbackMode || frozen) return;
+    if (quotePlaying && quoteSkip) quoteSkip();
+    // stash everything that defines the current sheet
+    const hadContent = (locked && locked.length > 0) || (current && current.length > 0);
+    stashedSheet = {
+      locked: locked.slice(),
+      current,
+      userFloor,
+      quoteShown,
+      activeQuote,
+      quoteHold,
+    };
+    feedbackMode = true;
+    document.body.classList.add('feedback');
+    settingsEl.hidden = true;
+    hintsNormal.hidden = true;
+    hintsFeedback.hidden = false;
+    newSheet();
+    phase = 'writing';
+    // seed the prompt as a single attribution-style line at the top, then
+    // a blank line so the cursor sits right where the user types
+    const promptLines = wrapText("What's on your mind?", MAX_COLS);
+    for (const ln of promptLines) {
+      const el = document.createElement('div');
+      el.className = 'line attrib quoteline';
+      for (const c of ln) el.appendChild(inkSpan(c));
+      feed.appendChild(el);
+      locked.push(ln);
+    }
+    // blank gap so user types on a fresh line below the prompt
+    const blank = document.createElement('div');
+    blank.className = 'line';
+    feed.appendChild(blank);
+    locked.push('');
+    userFloor = locked.length;   // user's writing starts here — prompt doesn't count
+    activeEl = null;
+    renderActive();
+    layout();
+    if (hadContent) {
+      feedbackPaused.classList.add('show');
+      clearTimeout(feedbackPausedTimer);
+      feedbackPausedTimer = setTimeout(() => feedbackPaused.classList.remove('show'), 4000);
+    }
+  }
+
+  function exitFeedbackMode(sent) {
+    if (!feedbackMode) return;
+    feedbackMode = false;
+    document.body.classList.remove('feedback');
+    hintsNormal.hidden = false;
+    hintsFeedback.hidden = true;
+    clearTimeout(feedbackPausedTimer);
+    feedbackPaused.classList.remove('show');
+    // restore the previous sheet
+    if (stashedSheet) {
+      locked = stashedSheet.locked.slice();
+      current = stashedSheet.current || '';
+      userFloor = stashedSheet.userFloor || 0;
+      quoteShown = !!stashedSheet.quoteShown;
+      activeQuote = stashedSheet.activeQuote || null;
+      quoteHold = stashedSheet.quoteHold || null;
+      feed.innerHTML = '';
+      locked.forEach((ln, idx) => {
+        const el = document.createElement('div');
+        el.className = 'line';
+        if (idx < userFloor) el.classList.add('quoteline');
+        for (const c of ln) el.appendChild(inkSpan(c));
+        feed.appendChild(el);
+      });
+      activeEl = null;
+      renderActive();
+      layout();
+      persistDraft();
+      updateMeter();
+    }
+    stashedSheet = null;
+    if (sent) {
+      // tiny "sent." indicator — uses the paused-toast slot, fades after 2s
+      feedbackPaused.textContent = 'sent.';
+      feedbackPaused.classList.add('show');
+      feedbackPausedTimer = setTimeout(() => {
+        feedbackPaused.classList.remove('show');
+        setTimeout(() => { feedbackPaused.textContent = "page paused — back when you're done"; }, 400);
+      }, 1800);
+    }
+  }
+
+  async function sendFeedback() {
+    if (!feedbackMode) return;
+    // collect the user's typed text (skip the seeded prompt lines)
+    const lines = locked.slice(userFloor);
+    if (current) lines.push(current);
+    const text = lines.join('\n').replace(/^\n+/, '').trimEnd();
+    if (!text) return;   // nothing typed
+    if (!window.typeAPI || !window.typeAPI.sendFeedback) return;
+    const res = await window.typeAPI.sendFeedback({ body: text });
+    if (res && res.ok) exitFeedbackMode(true);
+    // if cancelled in the confirm dialog or errored, stay in feedback mode
+    // (user can edit and try again, or hit esc)
+  }
+
+  rowFeedback.addEventListener('click', enterFeedbackMode);
+
   function burn() {
     if (frozen || phase !== 'writing') return;
     frozen = true;
@@ -1594,6 +1755,7 @@
 
     if (e.key === 'Escape') {
       if (!settingsEl.hidden) { e.preventDefault(); settingsEl.hidden = true; return; }
+      if (feedbackMode) { e.preventDefault(); exitFeedbackMode(false); return; }
       if (cursor) { e.preventDefault(); exitOverstrike(); return; }
       // exit Zen mode if currently in it — macOS native fullscreen doesn't
       // respond to Esc by default, so we wire it here explicitly
@@ -1609,8 +1771,17 @@
     }
     if (e.ctrlKey && (e.key === 'm' || e.key === 'M')) { e.preventDefault(); setSound(!settings.sound); return; }
     if (mod && e.key === ',') { e.preventDefault(); toggleSettings(); return; }
-    if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); save(); return; }
-    if (mod && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); burn(); return; }
+    if (mod && (e.key === 's' || e.key === 'S')) {
+      e.preventDefault();
+      if (feedbackMode) sendFeedback(); else save();
+      return;
+    }
+    if (mod && (e.key === 'b' || e.key === 'B')) {
+      e.preventDefault();
+      if (feedbackMode) return;   // burn is meaningless in feedback mode
+      burn();
+      return;
+    }
     if (mod && (e.key === 'Backspace' || e.key === 'Delete')) {
       e.preventDefault();
       if (frozen || phase !== 'writing') return;

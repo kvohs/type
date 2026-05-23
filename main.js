@@ -100,6 +100,47 @@ ipcMain.handle('type:share-image', async (_e, payload) => {
   }
 });
 
+// --- feedback ---
+// renderer hands us the feedback text. we show a native confirm dialog
+// (so the user can see exactly what's about to leave the machine), then
+// POST it to the Coop-hosted endpoint, which forwards via Resend.
+// the recipient address lives on the server, never in this binary.
+const FEEDBACK_ENDPOINT = 'https://heycoop.ai/api/type-feedback';
+
+ipcMain.handle('type:send-feedback', async (e, payload) => {
+  try {
+    const body = (payload && typeof payload.body === 'string') ? payload.body.trim() : '';
+    if (!body) return { ok: false, error: 'empty feedback' };
+
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const preview = body.length > 600 ? body.slice(0, 600) + '\n…' : body;
+    const confirm = await dialog.showMessageBox(win, {
+      type: 'question',
+      title: 'Send this feedback to Kelly?',
+      message: 'Send this feedback?',
+      detail: preview,
+      buttons: ['Send', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (confirm.response !== 0) return { ok: false, cancelled: true };
+
+    const res = await fetch(FEEDBACK_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body, version: APP_VERSION }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { ok: false, error: `server returned ${res.status}: ${text.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    log.error('feedback send error', err);
+    return { ok: false, error: String(err && err.message || err) };
+  }
+});
+
 ipcMain.handle('type:save-note', async (_e, payload) => {
   try {
     const { content, filename } = payload || {};

@@ -375,6 +375,11 @@
   .setdiv { height: 1px; background: var(--rule); margin: 6px 0; }
   .setrow-btn { cursor: pointer; gap: 12px; }
   .setrow-btn[hidden] { display: none; }
+  /* Sound sub-rows — only shown when Sound itself is on. Indent + slightly
+     quieter label so they read as children of the Sound row above. */
+  .sound-details[hidden] { display: none; }
+  .setrow-sub { padding-left: 16px; }
+  .setrow-sub > span:first-child { color: var(--ink-quiet); }
   .setval {
     flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 12px; color: var(--ink-soft, #2c2d32);
@@ -383,8 +388,31 @@
     flex: none; font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
     color: var(--accent);
   }
+  /* Segmented picker — used in a full-width setrow for mutually-exclusive
+     choices like the theme. Reads like a list of options ("light · dark ·
+     amber · dispatch") with the active one in accent. Replaces 3 toggle rows. */
+  .setrow-seg { padding: 4px 0; justify-content: center; }
+  .seg {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-wrap: nowrap; gap: 0;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .seg-opt {
+    appearance: none; background: none; border: 0; padding: 4px 5px;
+    font: inherit; letter-spacing: inherit; text-transform: inherit;
+    color: var(--ink-quiet); cursor: pointer; border-radius: 4px;
+    transition: color .15s ease;
+  }
+  .seg-opt:hover { color: var(--ink-soft); }
+  .seg-opt[aria-pressed="true"] { color: var(--accent); }
+  .seg-opt + .seg-opt::before {
+    content: "·"; color: var(--ink-faint); margin: 0 2px 0 -3px; pointer-events: none;
+  }
   .burnsecs { margin-left: auto; margin-right: 14px; cursor: pointer; }
-  /* unobtrusive version line at the bottom of the settings panel */
+  /* Unobtrusive footer at the bottom of the settings panel — version + the
+     two quiet links (feedback, why?). All in the same caps-mono treatment as
+     before; the links pick up the accent on hover. */
   .setversion {
     margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule);
     text-align: center; font-family: var(--mono);
@@ -392,6 +420,14 @@
     color: var(--ink-quiet); user-select: none;
   }
   .setversion:empty { display: none; }
+  .setversion .setfoot-link {
+    appearance: none; background: none; border: 0; padding: 2px 4px;
+    font: inherit; letter-spacing: inherit; text-transform: inherit;
+    color: var(--ink-quiet); cursor: pointer;
+    transition: color .15s ease;
+  }
+  .setversion .setfoot-link:hover { color: var(--accent); }
+  .setversion .setfoot-sep { color: var(--ink-faint); margin: 0 4px; }
 
   /* live session stats inside the settings panel — visible whenever you
      open settings, so you can check the word count + writing time without
@@ -455,8 +491,8 @@
     <div class="stamp" id="stamp"><div class="date" id="stampDate"></div><div class="kept" id="stampKept"></div></div>
     <div class="smolder-veil" id="smolderVeil"></div>
     <div class="smolder-warn" id="smolderWarn" aria-hidden="true">keep typing or this burns</div>
-    <div class="feedback-label" id="feedbackLabel" aria-hidden="true">feedback —</div>
-    <div class="feedback-paused" id="feedbackPaused" aria-hidden="true">page paused — back when you're done</div>
+    <div class="feedback-label" id="feedbackLabel" aria-hidden="true">feedback</div>
+    <div class="feedback-paused" id="feedbackPaused" aria-hidden="true">page paused. back when you're done.</div>
     <div class="quote-share" id="quoteShare" title="share as wallpaper" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2"/><path d="M5 5L8 2L11 5"/><path d="M3.5 8V13C3.5 13.5523 3.94772 14 4.5 14H11.5C12.0523 14 12.5 13.5523 12.5 13V8"/></svg></div>
     <div class="quote-x" id="quoteX" title="remove the quote" aria-hidden="true">&#215;</div>
   </div>
@@ -479,35 +515,36 @@
   <div class="settings" id="settings" hidden>
     <div class="settings-title">settings</div>
     <div class="setstats" id="setStats" aria-hidden="true"><span id="setStatsWords"></span><span id="setStatsTime"></span></div>
-    <label class="setrow"><span>Dark mode</span><input type="checkbox" id="setDark" /><span class="sw"></span></label>
-    <label class="setrow"><span>Amber</span><input type="checkbox" id="setAmber" /><span class="sw"></span></label>
-    <label class="setrow"><span>Dispatch</span><input type="checkbox" id="setDispatch" /><span class="sw"></span></label>
+    <div class="setrow setrow-seg">
+      <span class="seg" id="themePick" role="radiogroup" aria-label="Theme">
+        <button type="button" class="seg-opt" data-theme="">light</button>
+        <button type="button" class="seg-opt" data-theme="dark">dark</button>
+        <button type="button" class="seg-opt" data-theme="amber">amber</button>
+        <button type="button" class="seg-opt" data-theme="dispatch">dispatch</button>
+      </span>
+    </div>
     <div class="setdiv"></div>
-    <label class="setrow"><span>Zen mode <span class="info" tabindex="0">i<span class="tip">Goes fullscreen — just you and the page. ⌘⇧F to toggle, Esc to exit.</span></span></span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
+    <label class="setrow"><span>Zen mode <span class="info" tabindex="0">i<span class="tip">Goes fullscreen. Just you and the page. ⌘⇧F to toggle, Esc to exit.</span></span></span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
     <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top <span class="info" tabindex="0">i<span class="tip">Keeps the type window above all others. Good for jotting while reading something else.</span></span></span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
     <label class="setrow"><span>Burn if I stop</span><span class="setpick burnsecs" id="burnAfterVal" hidden>10s</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
     <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
     <label class="setrow"><span>Timer</span><input type="checkbox" id="setTimer" /><span class="sw"></span></label>
     <div class="setdiv"></div>
     <label class="setrow"><span>Sound</span><input type="checkbox" id="setSound" /><span class="sw"></span></label>
-    <div class="setdiv"></div>
-    <label class="setrow"><span>Keystroke click</span><input type="checkbox" id="setClicks" /><span class="sw"></span></label>
-    <label class="setrow"><span>Carriage return</span><input type="checkbox" id="setCarriage" /><span class="sw"></span></label>
-    <label class="setrow"><span>Margin bell</span><input type="checkbox" id="setBell" /><span class="sw"></span></label>
+    <div class="sound-details" id="soundDetails" hidden>
+      <label class="setrow setrow-sub"><span>Keystroke click</span><input type="checkbox" id="setClicks" /><span class="sw"></span></label>
+      <label class="setrow setrow-sub"><span>Carriage return</span><input type="checkbox" id="setCarriage" /><span class="sw"></span></label>
+      <label class="setrow setrow-sub"><span>Margin bell</span><input type="checkbox" id="setBell" /><span class="sw"></span></label>
+    </div>
     <div class="setdiv"></div>
     <div class="settings-title">quotes</div>
     <label class="setrow"><span>On startup</span><input type="checkbox" id="setQuoteOpen" /><span class="sw"></span></label>
     <label class="setrow"><span>On burn</span><input type="checkbox" id="setQuoteBurn" /><span class="sw"></span></label>
     <div class="setdiv" id="saveDiv" hidden></div>
-    <div class="settings-title" id="saveTitle" hidden>save as .md to <span class="info" tabindex="0">i<span class="tip">Point this at your Obsidian vault — or any notes folder — and kept pages land straight in your notes. Plain markdown, no import step.</span></span></div>
+    <div class="settings-title" id="saveTitle" hidden>save as .md to <span class="info" tabindex="0">i<span class="tip">Point this at your Obsidian vault, or any notes folder. Kept pages land straight in your notes. Plain markdown, no import step.</span></span></div>
     <div class="setrow setrow-btn" id="rowSaveFolder" hidden>
       <span class="setval" id="saveFolderLabel">Downloads</span>
       <span class="setpick">choose…</span>
-    </div>
-    <div class="setdiv"></div>
-    <div class="setrow setrow-btn" id="rowFeedback">
-      <span class="setval">Send feedback</span>
-      <span class="setpick">write</span>
     </div>
     <div class="setversion" id="setVersion" aria-hidden="true"></div>
   </div>
@@ -528,10 +565,37 @@
   const settingsEl = document.getElementById('settings');
   const quoteX = document.getElementById('quoteX');
   const quoteShare = document.getElementById('quoteShare');
-  // small version label at the bottom of settings — populated from main via preload
+  // Footer line at the bottom of settings: "v1.3.7 · feedback · why?". The
+  // version comes from main via preload (only set in the Electron build);
+  // in a plain browser dev preview that slot is omitted instead of falling
+  // back to placeholder text. feedback opens the in-app writing surface,
+  // why? opens the type site externally.
   const setVersionEl = document.getElementById('setVersion');
-  if (setVersionEl && window.typeAPI && window.typeAPI.version) {
-    setVersionEl.textContent = 'v' + window.typeAPI.version;
+  if (setVersionEl) {
+    const ver = window.typeAPI && window.typeAPI.version;
+    const parts = [];
+    if (ver) {
+      const v = document.createElement('span');
+      v.textContent = 'v' + ver;
+      parts.push(v);
+    }
+    const fbBtn = document.createElement('button'); fbBtn.type = 'button';
+    fbBtn.className = 'setfoot-link'; fbBtn.id = 'footFeedback'; fbBtn.textContent = 'feedback';
+    parts.push(fbBtn);
+    const whyBtn = document.createElement('button'); whyBtn.type = 'button';
+    whyBtn.className = 'setfoot-link'; whyBtn.id = 'footWhy'; whyBtn.textContent = 'why?';
+    parts.push(whyBtn);
+    parts.forEach((p, i) => {
+      if (i > 0) {
+        const sep = document.createElement('span');
+        sep.className = 'setfoot-sep'; sep.textContent = '·';
+        setVersionEl.append(sep);
+      }
+      setVersionEl.append(p);
+    });
+    setVersionEl.removeAttribute('aria-hidden');
+    whyBtn.addEventListener('click', () => { window.open('https://kellyvohs.com/type#why', '_blank', 'noopener'); });
+    // feedback wiring is bound later, once enterFeedbackMode is defined
   }
 
   /* ================= SETTINGS ================= */
@@ -543,24 +607,43 @@
   const applyTheme = () => {
     THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { dark: document.getElementById('setDark'), amber: document.getElementById('setAmber'), dispatch: document.getElementById('setDispatch'), zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
       settings[k] = boxes[k].checked;
-      // the themes are mutually exclusive — turning one on clears the others
-      if (THEMES.includes(k) && settings[k]) {
-        THEMES.filter(t => t !== k).forEach(t => { settings[t] = false; boxes[t].checked = false; });
-      }
       saveSettings();
-      if (THEMES.includes(k)) applyTheme();
       if (k === 'zen')   applyZen();
       if (k === 'onTop') applyOnTop();
       if (k === 'smolder') { if (settings.smolder) scheduleSmolder(); else coolSmolder(); updateBurnAfter(); }
       if (k === 'wordCount' || k === 'timer') updateMeter();
+      if (k === 'sound') applySoundDetails();
     });
   });
+  // Theme picker — mutually exclusive across THEMES booleans + "light" (none on)
+  const themePick = document.getElementById('themePick');
+  const syncThemePick = () => {
+    const active = THEMES.find(t => settings[t]) || '';
+    themePick.querySelectorAll('.seg-opt').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.theme === active));
+    });
+  };
+  themePick.addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg-opt');
+    if (!btn) return;
+    const pick = btn.dataset.theme;
+    THEMES.forEach(t => { settings[t] = (t === pick); });
+    saveSettings();
+    applyTheme();
+    syncThemePick();
+  });
+  syncThemePick();
   applyTheme();
+  // Sound has 3 sub-toggles (clicks / carriage / bell) that only matter when
+  // sound is on — keep them tucked away otherwise to keep the panel short.
+  const soundDetails = document.getElementById('soundDetails');
+  const applySoundDetails = () => { soundDetails.hidden = !settings.sound; };
+  applySoundDetails();
   const toggleSettings = () => { settingsEl.hidden = !settingsEl.hidden; if (!settingsEl.hidden) hints.classList.remove('dim'); };
   hintSettings.addEventListener('click', toggleSettings);
   document.addEventListener('mousedown', (e) => {
@@ -1348,7 +1431,9 @@
   const feedbackPaused = document.getElementById('feedbackPaused');
   const hintsNormal = document.getElementById('hintsNormal');
   const hintsFeedback = document.getElementById('hintsFeedback');
-  const rowFeedback = document.getElementById('rowFeedback');
+  // Feedback is launched from the footer link at the bottom of the settings
+  // panel ("v1.3.7 · feedback · why?"). The element is created in JS earlier.
+  const footFeedback = document.getElementById('footFeedback');
   let feedbackPausedTimer = null;
 
   function enterFeedbackMode() {
@@ -1391,7 +1476,7 @@
     // writing — fades only when feedback mode exits. this is the visible
     // promise that the writing isn't lost.
     if (hadContent) {
-      feedbackPaused.textContent = "page paused — back when you're done";
+      feedbackPaused.textContent = "page paused. back when you're done.";
       feedbackPaused.classList.add('show');
     }
   }
@@ -1433,7 +1518,7 @@
       feedbackPaused.classList.add('show');
       feedbackPausedTimer = setTimeout(() => {
         feedbackPaused.classList.remove('show');
-        setTimeout(() => { feedbackPaused.textContent = "page paused — back when you're done"; }, 400);
+        setTimeout(() => { feedbackPaused.textContent = "page paused. back when you're done."; }, 400);
       }, 1800);
     }
   }
@@ -1452,7 +1537,11 @@
     // (user can edit and try again, or hit esc)
   }
 
-  rowFeedback.addEventListener('click', enterFeedbackMode);
+  if (footFeedback) footFeedback.addEventListener('click', () => {
+    // close the settings panel as we drop into the feedback surface
+    settingsEl.hidden = true;
+    enterFeedbackMode();
+  });
 
   function burn() {
     if (frozen || phase !== 'writing') return;
@@ -1595,7 +1684,10 @@
   function updateMeter() {
     const n = ((locked.slice(userFloor).join(' ') + ' ' + current).match(/\S+/g) || []).length;
     const wordsText = n === 1 ? '1 word' : n + ' words';
-    let timeText = '';
+    // Always show a clock face; reads "0:00" until the first keystroke starts
+    // the session, then ticks. Without this fallback the timer toggle would
+    // look broken (blank) when the settings panel opens before any typing.
+    let timeText = '0:00';
     if (sheetStart) {
       const s = Math.max(0, Math.floor((Date.now() - sheetStart) / 1000));
       timeText = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');

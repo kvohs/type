@@ -277,7 +277,10 @@
   @keyframes smolderGrow { from { opacity: 0; } to { opacity: 1; } }
 
   .meter {
-    position: fixed; left: 22px; top: 18px; z-index: 9;
+    /* left edge clears the traffic lights (~80px wide at hiddenInset) so the
+       word count + timer aren't covered when not in zen mode. in zen mode
+       there are no lights, but the slightly inset position still reads fine. */
+    position: fixed; left: 92px; top: 18px; z-index: 9;
     display: flex; gap: 16px; pointer-events: none; user-select: none;
     font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
     text-transform: uppercase; color: var(--ink-faint);
@@ -428,8 +431,8 @@
     <label class="setrow"><span>Amber</span><input type="checkbox" id="setAmber" /><span class="sw"></span></label>
     <label class="setrow"><span>Dispatch</span><input type="checkbox" id="setDispatch" /><span class="sw"></span></label>
     <div class="setdiv"></div>
-    <label class="setrow"><span>Zen mode</span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
-    <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top</span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
+    <label class="setrow"><span>Zen mode <span class="info" tabindex="0">i<span class="tip">Goes fullscreen — hides the menu bar, dock, and window chrome. Press Esc to exit.</span></span></span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
+    <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top <span class="info" tabindex="0">i<span class="tip">Keeps the type window above all others. Good for jotting while reading something else.</span></span></span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
     <label class="setrow"><span>Burn if I stop</span><span class="setpick burnsecs" id="burnAfterVal" hidden>10s</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
     <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
     <label class="setrow"><span>Timer</span><input type="checkbox" id="setTimer" /><span class="sw"></span></label>
@@ -480,7 +483,7 @@
   }
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: true, onTop: false, smolder: true, smolderSecs: 10, wordCount: true, timer: true, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: true, smolderSecs: 10, wordCount: true, timer: true, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };

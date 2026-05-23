@@ -57,9 +57,13 @@ jobs:
           tag_name: ${{ steps.ref.outputs.tag }}
           name: type ${{ steps.ref.outputs.tag }}
           draft: true
-          # latest-mac.yml is what electron-updater reads to detect new releases
+          # latest-mac.yml = the auto-update manifest electron-updater reads
+          # *.zip = the actual update artifact MacUpdater downloads (dmg can't
+          # be used for in-place updates on macOS — needs to be a zip of the .app)
+          # *.dmg = first-time downloads from kellyvohs.com/type
           files: |
             dist/*.dmg
+            dist/*.zip
             dist/latest-mac.yml
           body: |
             ## type ${{ steps.ref.outputs.tag }}

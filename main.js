@@ -1,6 +1,8 @@
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const { spawn } = require('child_process');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -47,6 +49,37 @@ ipcMain.handle('type:set-on-top', (e, on) => {
   const w = BrowserWindow.fromWebContents(e.sender);
   if (w) w.setAlwaysOnTop(!!on);
   return true;
+});
+
+// --- native share sheet bridge ---
+// renderer hands us a PNG data URL; we write it to a temp file and spawn the
+// Swift helper (build/type-share) which presents NSSharingServicePicker.
+// the picker offers AirDrop, Messages, Notes, Mail, etc. — user picks one.
+ipcMain.handle('type:share-image', async (_e, payload) => {
+  try {
+    const dataUrl = payload && payload.dataUrl;
+    const slug = (payload && payload.slug) || 'quote';
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png;base64,')) {
+      return { ok: false, error: 'expected a PNG data URL' };
+    }
+    const buf = Buffer.from(dataUrl.split(',')[1], 'base64');
+    const tmp = path.join(os.tmpdir(), `type-${slug}-${Date.now()}.png`);
+    fs.writeFileSync(tmp, buf);
+
+    const bin = app.isPackaged
+      ? path.join(process.resourcesPath, 'type-share')
+      : path.join(__dirname, 'build', 'type-share');
+
+    if (!fs.existsSync(bin)) {
+      return { ok: false, error: 'share helper missing at ' + bin };
+    }
+
+    const child = spawn(bin, [tmp], { detached: true, stdio: 'ignore' });
+    child.unref();
+    return { ok: true, file: tmp };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err) };
+  }
 });
 
 ipcMain.handle('type:save-note', async (_e, payload) => {

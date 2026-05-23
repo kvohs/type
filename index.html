@@ -294,6 +294,19 @@
   }
   .quote-x:hover { color: var(--ink-quiet); opacity: 1; }
 
+  /* small mac share glyph above the × — invisible until the quote is hovered.
+     reveals on quote/button hover, fades out 80ms after leaving. */
+  .quote-share {
+    position: fixed; z-index: 9; display: none;
+    width: 18px; height: 18px; text-align: center;
+    cursor: pointer; opacity: 0; user-select: none;
+    color: var(--ink-quiet);
+    transition: opacity .2s ease, color .15s ease;
+  }
+  .quote-share.is-revealed { opacity: .75; }
+  .quote-share.is-revealed:hover { opacity: 1; color: var(--ink-soft); }
+  .quote-share svg { display: block; margin: 0 auto; }
+
   .smolder-warn {
     position: fixed; left: 0; right: 0; top: 40px; z-index: 7;
     text-align: center; pointer-events: none; user-select: none;
@@ -389,6 +402,7 @@
     <div class="smolder-veil" id="smolderVeil"></div>
     <div class="smolder-warn" id="smolderWarn" aria-hidden="true">keep typing or this burns</div>
     <div class="meter" id="meter" aria-hidden="true"><span id="meterWords"></span><span id="meterTime"></span></div>
+    <div class="quote-share" id="quoteShare" title="share as wallpaper" aria-hidden="true"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2"/><path d="M5 5L8 2L11 5"/><path d="M3.5 8V13C3.5 13.5523 3.94772 14 4.5 14H11.5C12.0523 14 12.5 13.5523 12.5 13V8"/></svg></div>
     <div class="quote-x" id="quoteX" title="remove the quote" aria-hidden="true">&#215;</div>
   </div>
 
@@ -449,6 +463,7 @@
   const meterWords = document.getElementById('meterWords');
   const meterTime  = document.getElementById('meterTime');
   const quoteX = document.getElementById('quoteX');
+  const quoteShare = document.getElementById('quoteShare');
 
   /* ================= SETTINGS ================= */
   const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: true, onTop: false, smolder: true, smolderSecs: 10, wordCount: true, timer: true, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
@@ -574,6 +589,7 @@
   let sheetStart = null;           // when the current sheet's writing began (for the timer)
   let userFloor = 0;               // index in locked where your own writing starts (seeded quote excluded from word count)
   let quoteShown = false;          // a seeded quote is currently on the page (removable via the ×)
+  let activeQuote = null;          // the quote object currently on the page — used by the share button
   const QUOTE_HOLD_ROWS = 3;       // lines you can type beneath a quote before it starts rolling up
 
   /* ================= SOUND ================= */
@@ -907,6 +923,7 @@
     if (phase !== 'writing' || quotePlaying) return;
     const q = forced || (list && list.length ? list[Math.floor(Math.random() * list.length)] : null);
     if (!q) return;
+    activeQuote = q;
     accentPeriod = false;
     const bodyLines = wrapText(q.text, MAX_COLS);          // typed out, full size
     const attribLines = wrapText('— ' + (q.author || 'Unknown'), MAX_COLS);  // author only
@@ -1377,15 +1394,27 @@
   }
   setInterval(updateMeter, 1000);
 
-  /* ================= QUOTE REMOVE (×) ================= */
+  /* ================= QUOTE REMOVE (×) + SHARE (↑) ================= */
   function positionQuoteX() {
-    if (!quoteShown) { quoteX.style.display = 'none'; return; }
+    if (!quoteShown) {
+      quoteX.style.display = 'none';
+      quoteShare.style.display = 'none';
+      return;
+    }
     const ql = feed.querySelector('.quoteline');
-    if (!ql) { quoteX.style.display = 'none'; return; }
+    if (!ql) {
+      quoteX.style.display = 'none';
+      quoteShare.style.display = 'none';
+      return;
+    }
     const r = ql.getBoundingClientRect();
     const fr = feed.getBoundingClientRect();
+    const x = (fr.right + 12) + 'px';
+    quoteShare.style.display = 'block';
+    quoteShare.style.left = x;
+    quoteShare.style.top  = (r.top - 19) + 'px';   // share sits above the ×
     quoteX.style.display = 'block';
-    quoteX.style.left = (fr.right + 12) + 'px';
+    quoteX.style.left = x;
     quoteX.style.top  = (r.top + 3) + 'px';
   }
   function removeQuote() {
@@ -1396,7 +1425,10 @@
     userFloor = 0;
     quoteHold = null;
     quoteShown = false;
+    activeQuote = null;
     quoteX.style.display = 'none';
+    quoteShare.style.display = 'none';
+    quoteShare.classList.remove('is-revealed');
     cursor = null;
     stage.classList.remove('overstriking');
     layout();
@@ -1404,6 +1436,133 @@
     updateMeter();
   }
   quoteX.addEventListener('click', removeQuote);
+
+  // hover-only reveal for the share icon: visible whenever the pointer is
+  // anywhere inside the quote's bounding rect (or over the icon hotspot).
+  // computed on mousemove so gaps between lines, line padding, and the icon
+  // column all count as "over the quote."
+  let shareHideTimer = null;
+  function revealShare() {
+    if (!quoteShown) return;
+    clearTimeout(shareHideTimer);
+    quoteShare.classList.add('is-revealed');
+  }
+  function unrevealShare() {
+    clearTimeout(shareHideTimer);
+    shareHideTimer = setTimeout(() => quoteShare.classList.remove('is-revealed'), 80);
+  }
+  function pointerOverQuote(x, y) {
+    if (!quoteShown) return false;
+    const lines = feed.querySelectorAll('.quoteline');
+    if (!lines.length) return false;
+    let top = Infinity, bottom = -Infinity, left = Infinity, right = -Infinity;
+    for (const el of lines) {
+      const r = el.getBoundingClientRect();
+      if (r.top < top) top = r.top;
+      if (r.bottom > bottom) bottom = r.bottom;
+      if (r.left < left) left = r.left;
+      if (r.right > right) right = r.right;
+    }
+    // include the icon column on the right so moving from quote → icon stays revealed
+    const sr = quoteShare.getBoundingClientRect();
+    if (sr.width) {
+      right = Math.max(right, sr.right + 6);
+      top   = Math.min(top, sr.top - 6);
+    }
+    return x >= left && x <= right && y >= top && y <= bottom;
+  }
+  document.addEventListener('mousemove', (e) => {
+    if (!quoteShown) return;
+    if (pointerOverQuote(e.clientX, e.clientY)) revealShare();
+    else unrevealShare();
+  });
+
+  // share the currently-seeded quote as a phone wallpaper PNG. renders on canvas
+  // using the active theme's tokens, hands the PNG to the native share sheet
+  // (AirDrop, Messages, Notes, Mail, …) via the bundled Swift helper.
+  async function renderQuoteWallpaper(quote) {
+    const W = 1290, H = 2796;                       // iPhone Pro Max-ish; scales fine on every device
+    const styles = getComputedStyle(document.body);
+    const paper  = (styles.getPropertyValue('--paper')     || '#ffffff').trim();
+    const quiet  = (styles.getPropertyValue('--ink-quiet') || '#7c7f86').trim();
+    const faint  = (styles.getPropertyValue('--ink-faint') || '#c2c4c9').trim();
+
+    const QUOTE_PX  = 56;
+    const ATTRIB_PX = 32;
+    try {
+      await document.fonts.load(`${QUOTE_PX}px "Courier Prime"`);
+      await document.fonts.load(`${ATTRIB_PX}px "Courier Prime"`);
+    } catch (_) {}
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = paper;
+    ctx.fillRect(0, 0, W, H);
+    ctx.textBaseline = 'top';
+
+    const padX = Math.round(W * 0.10);
+    const maxW = W - padX * 2;
+
+    ctx.font = `${QUOTE_PX}px "Courier Prime", "Courier New", monospace`;
+    const lines = wrapByWidth(ctx, (quote.text || '').trim(), maxW);
+
+    ctx.font = `${ATTRIB_PX}px "Courier Prime", "Courier New", monospace`;
+    const attribLines = wrapByWidth(ctx, '— ' + (quote.author || 'Unknown'), maxW);
+
+    const quoteLH  = Math.round(QUOTE_PX * 1.55);
+    const attribLH = Math.round(ATTRIB_PX * 1.55);
+    const gap      = Math.round(QUOTE_PX * 0.95);
+
+    // anchor block in the lower middle — lock-screen clocks rarely reach this band
+    const blockTop = Math.round(H * 0.60);
+
+    ctx.font = `${QUOTE_PX}px "Courier Prime", "Courier New", monospace`;
+    ctx.fillStyle = quiet;
+    lines.forEach((line, i) => ctx.fillText(line, padX, blockTop + i * quoteLH));
+
+    const attribTop = blockTop + lines.length * quoteLH + gap;
+    ctx.font = `${ATTRIB_PX}px "Courier Prime", "Courier New", monospace`;
+    ctx.fillStyle = faint;
+    attribLines.forEach((line, i) => ctx.fillText(line, padX, attribTop + i * attribLH));
+
+    return canvas.toDataURL('image/png');
+  }
+
+  function wrapByWidth(ctx, text, maxW) {
+    const words = String(text).split(/\s+/);
+    const out = [];
+    let line = '';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width <= maxW) line = test;
+      else { if (line) out.push(line); line = w; }
+    }
+    if (line) out.push(line);
+    return out;
+  }
+
+  function quoteSlug(q) {
+    const base = (q && (q.author || q.text) || 'quote');
+    return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'quote';
+  }
+
+  async function shareCurrentQuote() {
+    if (!activeQuote) return;
+    try {
+      const dataUrl = await renderQuoteWallpaper(activeQuote);
+      if (window.typeAPI && typeof window.typeAPI.shareImage === 'function') {
+        const res = await window.typeAPI.shareImage({ dataUrl, slug: quoteSlug(activeQuote) });
+        if (!res || !res.ok) console.warn('share failed:', res && res.error);
+      } else {
+        console.warn('shareImage bridge not available');
+      }
+    } catch (e) {
+      console.warn('share error:', e);
+    }
+  }
+  quoteShare.addEventListener('click', shareCurrentQuote);
 
   /* ================= HINTS ================= */
   // inverted: typing hides the controls (just thoughts); a pause brings them back.

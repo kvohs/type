@@ -66,6 +66,7 @@ jobs:
             - Burn now with ⌘B
             - First-run onboarding that hands off into an opening quote
             - Quotes on launch and on every burn, with a hover-× to drop one
+            - Share a quote as a phone-wallpaper PNG (hover the quote → share icon → AirDrop, Messages, Notes, Mail)
             - Overstrike: ↑ lifts the cursor onto a prior line; x covers a character and advances. ↓ returns to writing.
             - Word count + writing timer
             - Auto-saved drafts survive crashes and restarts

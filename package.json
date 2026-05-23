@@ -21,6 +21,9 @@
       "index.html",
       "quotes.js"
     ],
+    "extraResources": [
+      { "from": "build/type-share", "to": "type-share" }
+    ],
     "mac": {
       "target": [
         { "target": "dmg", "arch": "universal" }

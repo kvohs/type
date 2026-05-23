@@ -82,15 +82,28 @@ def build_master():
     period_cy = y0 + t_img.height + p_offset
     period_cx = x0 + t_img.width + visual_gap + dot_diam // 2
 
-    # supersample the dot 4× then downsample — PIL's ellipse() anti-aliasing
-    # leaves a visible intermediate-color halo against high-contrast backgrounds,
-    # so we render the dot on a much larger canvas and let LANCZOS do the
-    # boundary smoothing instead.
+    # draw the dot with a slightly darker outer ring as pre-emphasis. macOS scales
+    # icons through a Lanczos-family filter for display, which produces ~20%
+    # overshoot at high-contrast edges. by giving the outermost ~6% of the dot a
+    # color about 80% of the interior brightness, the overshoot can only peak at
+    # ~96% of interior — never exceeding it, so no visible halo. the ring is too
+    # thin (~3px at 256 display, ~1px at 128) to read as a design element.
     SS = 4
-    dot_canvas = Image.new("RGBA", (dot_diam * SS, dot_diam * SS), (0, 0, 0, 0))
-    ImageDraw.Draw(dot_canvas).ellipse(
-        (0, 0, dot_diam * SS - 1, dot_diam * SS - 1), fill=ACCENT
+    canvas_px = dot_diam * SS
+    dot_canvas = Image.new("RGBA", (canvas_px, canvas_px), (0, 0, 0, 0))
+    d = ImageDraw.Draw(dot_canvas)
+
+    # outer ring: 80% of accent brightness, holds the same hue
+    RING = tuple(int(c * 0.80) for c in ACCENT[:3]) + (255,)
+    d.ellipse((0, 0, canvas_px - 1, canvas_px - 1), fill=RING)
+
+    # interior at full accent, inset by 6% of dot diameter
+    inset = int(canvas_px * 0.06)
+    d.ellipse(
+        (inset, inset, canvas_px - 1 - inset, canvas_px - 1 - inset),
+        fill=ACCENT,
     )
+
     dot_small = dot_canvas.resize((dot_diam, dot_diam), Image.BOX)
     img.paste(
         dot_small,

@@ -1460,12 +1460,19 @@
     // seed the prompt using the same path quotes use — quoteCommitSilent
     // writes `current` into the active line, then creates a fresh active
     // line for the next thing. avoids duplicating cursor elements.
-    const promptLines = wrapText("What's on your mind?", MAX_COLS);
-    for (const ln of promptLines) {
-      current = ln;
-      quoteCommitSilent('attrib');
+    // Two lines: the question itself + a quiet note that email is welcome so
+    // Kelly can follow up if anything needs clarifying.
+    const promptSegments = [
+      "What's on your mind?",
+      "Add your email if you'd like a reply.",
+    ];
+    for (let s = 0; s < promptSegments.length; s++) {
+      for (const ln of wrapText(promptSegments[s], MAX_COLS)) {
+        current = ln;
+        quoteCommitSilent('attrib');
+      }
+      quoteCommitSilent();    // blank gap line after each prompt segment
     }
-    quoteCommitSilent();    // blank gap line below the prompt
     userFloor = locked.length;
     // mark the seeded lines as quotelines so they're styled like quote text
     for (let i = 0; i < userFloor && i < feed.children.length; i++) {

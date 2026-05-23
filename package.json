@@ -1,7 +1,7 @@
 {
   "name": "type",
   "productName": "type",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "A single sheet of paper. Type, then keep it or burn it.",
   "main": "main.js",
   "author": "Kelly Vohs",
@@ -15,6 +15,13 @@
   "build": {
     "appId": "com.kellyvohs.type",
     "productName": "type",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "kvohs",
+        "repo": "type"
+      }
+    ],
     "files": [
       "main.js",
       "preload.js",
@@ -22,11 +29,17 @@
       "quotes.js"
     ],
     "extraResources": [
-      { "from": "build/type-share", "to": "type-share" }
+      {
+        "from": "build/type-share",
+        "to": "type-share"
+      }
     ],
     "mac": {
       "target": [
-        { "target": "dmg", "arch": "universal" }
+        {
+          "target": "dmg",
+          "arch": "universal"
+        }
       ],
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
@@ -48,5 +61,8 @@
   "devDependencies": {
     "electron": "^31.7.7",
     "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }

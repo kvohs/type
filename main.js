@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 const { version: APP_VERSION } = require('./package.json');
 
 function createWindow() {
@@ -97,6 +98,30 @@ ipcMain.handle('type:save-note', async (_e, payload) => {
   }
 });
 
+// --- auto-update ---
+// reads latest-mac.yml from GitHub Releases (kvohs/type), downloads the new
+// dmg in the background, prompts on quit to install. needs the .app to be
+// signed + notarized, which it is.
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on('update-downloaded', (info) => {
+  const win = BrowserWindow.getAllWindows()[0];
+  dialog.showMessageBox(win, {
+    type: 'info',
+    title: 'type update ready',
+    message: `type ${info.version} is ready to install.`,
+    detail: 'The update applies the next time you quit and reopen type.',
+    buttons: ['OK'],
+    defaultId: 0,
+  }).catch(() => {});
+});
+
+autoUpdater.on('error', (err) => {
+  // network hiccup, rate limit, etc. — log but don't bother the user
+  console.log('auto-update check failed:', err && err.message || err);
+});
+
 app.whenReady().then(() => {
   // dev-mode dock icon on macOS — packaged builds use build/icon.icns automatically
   if (process.platform === 'darwin' && app.dock) {
@@ -106,6 +131,14 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // only check for updates in packaged builds — dev mode has no codesign
+  // identity for electron-updater to verify against
+  if (app.isPackaged) {
+    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
+    // check again every 6 hours while the app is running
+    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 6 * 60 * 60 * 1000);
+  }
 });
 
 app.on('window-all-closed', () => {

@@ -51,21 +51,25 @@ jobs:
       - name: Show what was built
         run: ls -lh dist
 
-      - name: Attach the .dmg to a draft release
+      - name: Attach the .dmg + auto-update manifest to a draft release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ref.outputs.tag }}
           name: type ${{ steps.ref.outputs.tag }}
           draft: true
-          files: dist/*.dmg
+          # latest-mac.yml is what electron-updater reads to detect new releases
+          files: |
+            dist/*.dmg
+            dist/latest-mac.yml
           body: |
             ## type ${{ steps.ref.outputs.tag }}
 
             A single sheet of paper. Type, then keep it or burn it.
 
             ### What's new
+            - Auto-updates from GitHub Releases — type checks on launch and prompts when a new version is ready
             - Three themes: Light, Amber phosphor, Dispatch
-            - Zen mode (fullscreen by default) and Stay-on-top
+            - Zen mode (fullscreen) and Stay-on-top
             - Smolder: the page chars if you stop typing; cools when you resume. Configurable delay (10 / 30 / 60 / 120s)
             - Burn now with ⌘B
             - First-run onboarding that hands off into an opening quote

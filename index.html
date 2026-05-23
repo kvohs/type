@@ -276,17 +276,6 @@
   .stage.smoldering .smolder-veil { animation: smolderGrow var(--smolder-dur, 6500ms) ease-in forwards; }
   @keyframes smolderGrow { from { opacity: 0; } to { opacity: 1; } }
 
-  .meter {
-    /* left edge clears the traffic lights (~80px wide at hiddenInset) so the
-       word count + timer aren't covered when not in zen mode. in zen mode
-       there are no lights, but the slightly inset position still reads fine. */
-    position: fixed; left: 92px; top: 18px; z-index: 9;
-    display: flex; gap: 16px; pointer-events: none; user-select: none;
-    font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
-    text-transform: uppercase; color: var(--ink-quiet);
-  }
-  .meter span:empty { display: none; }
-
   /* ---------- feedback mode ---------- */
   /* subtle paper tint so the room feels different from normal writing */
   body.feedback { background-color: color-mix(in srgb, var(--paper) 94%, var(--accent) 6%); }
@@ -302,10 +291,6 @@
     pointer-events: none; user-select: none; display: none;
   }
   body.feedback .feedback-label { display: block; }
-  /* in feedback mode the meter (word count + timer) hides — it's a writing
-     surface, not a writing session */
-  body.feedback .meter { display: none; }
-
   /* ephemeral "page paused" toast — only shown if the user had writing when
      they entered feedback mode. fades after a few seconds. */
   .feedback-paused {
@@ -427,27 +412,38 @@
     font-size: 9px; font-weight: 700; font-style: italic; line-height: 1;
     color: var(--ink-quiet); cursor: help; text-transform: none; letter-spacing: 0;
   }
-  .info .tip {
-    /* pops out to the LEFT of the info mark — the settings panel sits at the
-       right edge of the screen, so leftward keeps the tooltip in-frame and
-       doesn't overlap the row above */
-    position: absolute; right: calc(100% + 12px); top: 50%;
+  /* The inline .tip spans next to each info mark hold the source text but are
+     never shown — a single shared callout (#floatTip, appended at body level)
+     renders them on hover. We can't render the tip in place because .settings
+     uses transform: translateY(-50%) for centering, which makes it the
+     containing block for any position:fixed descendant (CSS spec quirk), and
+     overflow-y:auto would clip an absolutely-positioned tip horizontally too. */
+  .info .tip { display: none; }
+  .float-tip {
+    position: fixed; right: 290px; top: 0;
     transform: translateY(-50%) translateX(4px);
     width: 220px; padding: 10px 12px;
-    background: var(--panel); color: var(--ink-soft);
+    /* frosted glass: same panel color but translucent, with blur behind so the
+       writing softens into the callout instead of fighting it */
+    background: color-mix(in srgb, var(--panel) 78%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+    color: var(--ink-soft);
     border: 1px solid var(--rule); border-radius: 10px;
     box-shadow: 0 14px 30px -14px var(--panel-shadow);
+    font-family: var(--mono);
     font-size: 11.5px; font-weight: 400; font-style: normal; line-height: 1.55;
     letter-spacing: normal; text-transform: none; text-align: left; white-space: normal;
     opacity: 0; pointer-events: none;
     transition: opacity .16s ease, transform .16s ease;
-    z-index: 20;
+    z-index: 30;
   }
-  .info .tip::after {                 /* little caret pointing right at the mark */
+  .float-tip::after {                /* caret on the right edge, pointing at the info mark */
     content: ""; position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
-    border: 5px solid transparent; border-left-color: var(--panel);
+    border: 6px solid transparent;
+    border-left-color: color-mix(in srgb, var(--panel) 78%, transparent);
   }
-  .info:hover .tip, .info:focus .tip { opacity: 1; transform: translateY(-50%) translateX(0); }
+  .float-tip.show { opacity: 1; transform: translateY(-50%) translateX(0); }
 </style>
 </head>
 <body>
@@ -459,7 +455,6 @@
     <div class="stamp" id="stamp"><div class="date" id="stampDate"></div><div class="kept" id="stampKept"></div></div>
     <div class="smolder-veil" id="smolderVeil"></div>
     <div class="smolder-warn" id="smolderWarn" aria-hidden="true">keep typing or this burns</div>
-    <div class="meter" id="meter" aria-hidden="true"><span id="meterWords"></span><span id="meterTime"></span></div>
     <div class="feedback-label" id="feedbackLabel" aria-hidden="true">feedback —</div>
     <div class="feedback-paused" id="feedbackPaused" aria-hidden="true">page paused — back when you're done</div>
     <div class="quote-share" id="quoteShare" title="share as wallpaper" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2"/><path d="M5 5L8 2L11 5"/><path d="M3.5 8V13C3.5 13.5523 3.94772 14 4.5 14H11.5C12.0523 14 12.5 13.5523 12.5 13V8"/></svg></div>
@@ -488,7 +483,7 @@
     <label class="setrow"><span>Amber</span><input type="checkbox" id="setAmber" /><span class="sw"></span></label>
     <label class="setrow"><span>Dispatch</span><input type="checkbox" id="setDispatch" /><span class="sw"></span></label>
     <div class="setdiv"></div>
-    <label class="setrow"><span>Zen mode <span class="info" tabindex="0">i<span class="tip">Goes fullscreen — hides the menu bar, dock, and window chrome. Toggle with ⌃⌘F. Press Esc to exit.</span></span></span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
+    <label class="setrow"><span>Zen mode <span class="info" tabindex="0">i<span class="tip">Goes fullscreen — just you and the page. ⌘⇧F to toggle, Esc to exit.</span></span></span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
     <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top <span class="info" tabindex="0">i<span class="tip">Keeps the type window above all others. Good for jotting while reading something else.</span></span></span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
     <label class="setrow"><span>Burn if I stop</span><span class="setpick burnsecs" id="burnAfterVal" hidden>10s</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
     <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
@@ -517,6 +512,8 @@
     <div class="setversion" id="setVersion" aria-hidden="true"></div>
   </div>
 
+  <div class="float-tip" id="floatTip" role="tooltip" aria-hidden="true"></div>
+
 <script src="quotes.js"></script>
 <script>
 (() => {
@@ -529,8 +526,6 @@
   const stampKept = document.getElementById('stampKept');
   const hintSettings = document.getElementById('hintSettings');
   const settingsEl = document.getElementById('settings');
-  const meterWords = document.getElementById('meterWords');
-  const meterTime  = document.getElementById('meterTime');
   const quoteX = document.getElementById('quoteX');
   const quoteShare = document.getElementById('quoteShare');
   // small version label at the bottom of settings — populated from main via preload
@@ -570,6 +565,28 @@
   hintSettings.addEventListener('click', toggleSettings);
   document.addEventListener('mousedown', (e) => {
     if (!settingsEl.hidden && !settingsEl.contains(e.target) && !hintSettings.contains(e.target)) settingsEl.hidden = true;
+  });
+
+  // Each info mark has an inline .tip span carrying its text. Render that text
+  // through a single shared callout (#floatTip) appended at body level — the
+  // settings panel's transform centering + overflow:auto would otherwise trap
+  // and clip the tooltip.
+  const floatTip = document.getElementById('floatTip');
+  settingsEl.querySelectorAll('.info').forEach(infoEl => {
+    const src = infoEl.querySelector('.tip');
+    if (!src || !floatTip) return;
+    const text = src.textContent;
+    const show = () => {
+      const r = infoEl.getBoundingClientRect();
+      floatTip.textContent = text;
+      floatTip.style.top = (r.top + r.height / 2) + 'px';
+      floatTip.classList.add('show');
+    };
+    const hide = () => floatTip.classList.remove('show');
+    infoEl.addEventListener('mouseenter', show);
+    infoEl.addEventListener('mouseleave', hide);
+    infoEl.addEventListener('focus', show);
+    infoEl.addEventListener('blur', hide);
   });
 
   // save-folder picker — only available in the desktop app
@@ -1570,9 +1587,8 @@
   }
 
   /* ================= METER (word count + timer) ================= */
-  // shows live counts in two places:
-  // - the on-screen overlay (.meter), gated by settings.wordCount + settings.timer
-  // - the settings panel's session-stats line, always visible when settings are open
+  // Live counts only appear inside the settings panel's session-stats line,
+  // and only when the matching toggle is on — the writing surface stays clean.
   const setStatsWords = document.getElementById('setStatsWords');
   const setStatsTime  = document.getElementById('setStatsTime');
   function ensureClock() { if (sheetStart === null) sheetStart = Date.now(); }
@@ -1584,12 +1600,8 @@
       const s = Math.max(0, Math.floor((Date.now() - sheetStart) / 1000));
       timeText = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
     }
-    // on-screen overlay obeys the user's toggles
-    meterWords.textContent = settings.wordCount ? wordsText : '';
-    meterTime.textContent  = settings.timer ? timeText : '';
-    // in-settings line is always populated when settings are open
-    setStatsWords.textContent = wordsText;
-    setStatsTime.textContent  = timeText;
+    setStatsWords.textContent = settings.wordCount ? wordsText : '';
+    setStatsTime.textContent  = settings.timer ? timeText : '';
   }
   setInterval(updateMeter, 1000);
 
@@ -1795,9 +1807,9 @@
       return;
     }
     if (e.ctrlKey && (e.key === 'm' || e.key === 'M')) { e.preventDefault(); setSound(!settings.sound); return; }
-    // ⌃⌘F toggles Zen — works whether or not the system menu's "Toggle Full
-    // Screen" wires through. main process keeps settings + checkbox in sync.
-    if (e.metaKey && e.ctrlKey && (e.key === 'f' || e.key === 'F')) {
+    // ⌘⇧F toggles Zen. macOS's system "Toggle Full Screen" (⌃⌘F) still works
+    // as a backup via the menu — main process keeps settings + checkbox in sync.
+    if (e.metaKey && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
       e.preventDefault();
       settings.zen = !settings.zen;
       boxes.zen.checked = settings.zen;

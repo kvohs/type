@@ -30,6 +30,7 @@
       ],
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
+      "x64ArchFiles": "Contents/Resources/type-share",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",

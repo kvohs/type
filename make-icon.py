@@ -82,11 +82,20 @@ def build_master():
     period_cy = y0 + t_img.height + p_offset
     period_cx = x0 + t_img.width + visual_gap + dot_diam // 2
 
-    d = ImageDraw.Draw(img)
-    d.ellipse(
-        (period_cx - dot_diam // 2, int(period_cy - dot_diam / 2),
-         period_cx + dot_diam // 2, int(period_cy + dot_diam / 2)),
-        fill=ACCENT,
+    # supersample the dot 4× then downsample — PIL's ellipse() anti-aliasing
+    # leaves a visible intermediate-color halo against high-contrast backgrounds,
+    # so we render the dot on a much larger canvas and let LANCZOS do the
+    # boundary smoothing instead.
+    SS = 4
+    dot_canvas = Image.new("RGBA", (dot_diam * SS, dot_diam * SS), (0, 0, 0, 0))
+    ImageDraw.Draw(dot_canvas).ellipse(
+        (0, 0, dot_diam * SS - 1, dot_diam * SS - 1), fill=ACCENT
+    )
+    dot_small = dot_canvas.resize((dot_diam, dot_diam), Image.LANCZOS)
+    img.paste(
+        dot_small,
+        (period_cx - dot_diam // 2, int(period_cy - dot_diam / 2)),
+        dot_small,
     )
     return img
 

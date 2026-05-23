@@ -1,9 +1,9 @@
 name: Release
 
-# Builds an unsigned universal macOS .dmg and attaches it to a draft GitHub
-# Release. Triggered when you push a vX.Y.Z tag, or manually from the Actions
-# tab (handy for re-running a tag that was created before this workflow
-# existed).
+# Builds a signed + notarized universal macOS .dmg and attaches it to a draft
+# GitHub Release. Triggered when you push a vX.Y.Z tag, or manually from the
+# Actions tab. Requires these repo secrets: CSC_LINK (base64 .p12), CSC_KEY_PASSWORD,
+# APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID.
 
 on:
   push:
@@ -39,9 +39,13 @@ jobs:
 
       - run: npm ci
 
-      - name: Build unsigned universal .dmg
+      - name: Build signed + notarized universal .dmg
         env:
-          CSC_IDENTITY_AUTODISCOVERY: 'false'
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run dist -- --publish never
 
       - name: Show what was built
@@ -74,6 +78,8 @@ jobs:
             - Current-line editing: ⌫ char, ⌥⌫ word, ⌘⌫ wipe line. Committed lines stay locked.
 
             ### Install
-            1. Download `type-*-universal.dmg` below
+            1. Download `type-universal.dmg` below
             2. Open it, drag **type** into Applications
-            3. First launch: right-click the app → Open → confirm (build is unsigned; Gatekeeper will ask once)
+            3. Double-click "type" from Applications. You're in.
+
+            (Build is signed with a Developer ID Application certificate and notarized by Apple.)

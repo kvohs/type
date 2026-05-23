@@ -26,6 +26,15 @@ function createWindow() {
 
   win.loadFile(path.join(__dirname, 'index.html'));
 
+  // notify the renderer whenever the window's fullscreen state changes, so
+  // Zen settings + checkbox stay in sync no matter how it was triggered
+  // (settings click, ⌃⌘F system shortcut, green-button hover menu, Esc, etc.)
+  const sendFs = (on) => {
+    if (!win.isDestroyed()) win.webContents.send('type:fullscreen-changed', on);
+  };
+  win.on('enter-full-screen', () => sendFs(true));
+  win.on('leave-full-screen', () => sendFs(false));
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url);
     return { action: 'deny' };

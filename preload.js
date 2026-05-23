@@ -14,4 +14,12 @@ contextBridge.exposeInMainWorld('typeAPI', {
   shareImage: (payload) => ipcRenderer.invoke('type:share-image', payload),
   setZen: (on) => ipcRenderer.invoke('type:set-zen', !!on),
   setOnTop: (on) => ipcRenderer.invoke('type:set-on-top', !!on),
+  // fires whenever the window enters or leaves macOS native fullscreen, so
+  // settings.zen stays in sync no matter how it was triggered (settings click,
+  // ⌃⌘F system shortcut, green-button menu, Esc, etc.)
+  onFullscreenChanged: (cb) => {
+    const handler = (_e, on) => cb(!!on);
+    ipcRenderer.on('type:fullscreen-changed', handler);
+    return () => ipcRenderer.off('type:fullscreen-changed', handler);
+  },
 });

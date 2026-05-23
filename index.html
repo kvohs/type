@@ -1077,6 +1077,47 @@
     return out;
   }
 
+  // Re-wrap the user-typed portion of the page to the current MAX_COLS, so
+  // resizing the window doesn't leave old narrow auto-wraps stranded against
+  // the left edge of a wider centered column. Empty lines are preserved as
+  // paragraph breaks; the welcome/quote section above userFloor is left alone.
+  let lastMaxCols = MAX_COLS;
+  function reflowLocked() {
+    if (phase !== 'writing') return;
+    if (cursor !== null || quotePlaying) return;       // mid-overstrike or mid-typed-quote: skip
+    if (lastMaxCols === MAX_COLS) return;
+    lastMaxCols = MAX_COLS;
+    if (locked.length <= userFloor) return;
+
+    const user = locked.slice(userFloor);
+    const out = [];
+    let para = [];
+    const flush = () => {
+      if (!para.length) return;
+      for (const l of wrapText(para.join(' '), MAX_COLS)) out.push(l);
+      para = [];
+    };
+    for (const ln of user) {
+      if (ln === '') { flush(); out.push(''); }
+      else para.push(ln);
+    }
+    flush();
+
+    if (out.length === user.length && out.every((l, i) => l === user[i])) return;
+
+    locked = locked.slice(0, userFloor).concat(out);
+    while (feed.children.length > userFloor) feed.removeChild(feed.lastChild);
+    for (const ln of out) {
+      const el = document.createElement('div');
+      el.className = 'line';
+      for (const c of ln) el.appendChild(inkSpan(c));
+      feed.appendChild(el);
+    }
+    activeEl = null;
+    renderActive();
+    persistDraft();
+  }
+
   function quoteCommitSilent(cls) {           // commit the active line with no sound, no slide
     if (activeEl) {
       activeEl.classList.remove('cr');
@@ -2004,7 +2045,7 @@
     if (hintSettings.contains(e.target) || settingsEl.contains(e.target)) return;   // don't let settings clicks skip the intro
     if (phase === 'intro') { if (!introPlayed) playIntro(); else skipIntro(); }
   });
-  window.addEventListener('resize', () => { computeCols(); layout(); });
+  window.addEventListener('resize', () => { computeCols(); reflowLocked(); layout(); });
 
   computeCols();
   const recovered = readDraft();

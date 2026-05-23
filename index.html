@@ -364,6 +364,14 @@
     color: var(--accent);
   }
   .burnsecs { margin-left: auto; margin-right: 14px; cursor: pointer; }
+  /* unobtrusive version line at the bottom of the settings panel */
+  .setversion {
+    margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule);
+    text-align: center; font-family: var(--mono);
+    font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--ink-faint); user-select: none;
+  }
+  .setversion:empty { display: none; }
   .info {
     position: relative;
     display: inline-flex; align-items: center; justify-content: center;
@@ -446,6 +454,7 @@
       <span class="setval">Replay the intro</span>
       <span class="setpick">play</span>
     </div>
+    <div class="setversion" id="setVersion" aria-hidden="true"></div>
   </div>
 
 <script src="quotes.js"></script>
@@ -464,6 +473,11 @@
   const meterTime  = document.getElementById('meterTime');
   const quoteX = document.getElementById('quoteX');
   const quoteShare = document.getElementById('quoteShare');
+  // small version label at the bottom of settings — populated from main via preload
+  const setVersionEl = document.getElementById('setVersion');
+  if (setVersionEl && window.typeAPI && window.typeAPI.version) {
+    setVersionEl.textContent = 'v' + window.typeAPI.version;
+  }
 
   /* ================= SETTINGS ================= */
   const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: true, onTop: false, smolder: true, smolderSecs: 10, wordCount: true, timer: true, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };

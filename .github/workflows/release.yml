@@ -1,0 +1,78 @@
+name: Release
+
+# Builds an unsigned universal macOS .dmg and attaches it to a draft GitHub
+# Release. Triggered when you push a vX.Y.Z tag, or manually from the Actions
+# tab (handy for re-running a tag that was created before this workflow
+# existed).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and release (e.g. v1.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Resolve which ref to build
+        id: ref
+        run: |
+          REF="${{ inputs.tag }}"
+          [ -z "$REF" ] && REF="${GITHUB_REF#refs/tags/}"
+          echo "tag=$REF" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build unsigned universal .dmg
+        env:
+          CSC_IDENTITY_AUTODISCOVERY: 'false'
+        run: npm run dist
+
+      - name: Show what was built
+        run: ls -lh dist
+
+      - name: Attach the .dmg to a draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ref.outputs.tag }}
+          name: type ${{ steps.ref.outputs.tag }}
+          draft: true
+          files: dist/*.dmg
+          body: |
+            ## type ${{ steps.ref.outputs.tag }}
+
+            A single sheet of paper. Type, then keep it or burn it.
+
+            ### What's new
+            - Three themes: Light, Amber phosphor, Dispatch
+            - Zen mode (fullscreen by default) and Stay-on-top
+            - Smolder: the page chars if you stop typing; cools when you resume. Configurable delay (10 / 30 / 60 / 120s)
+            - Burn now with ⌘B
+            - First-run onboarding that hands off into an opening quote
+            - Quotes on launch and on every burn, with a hover-× to drop one
+            - Overstrike: ↑ lifts the cursor onto a prior line; x covers a character and advances. ↓ returns to writing.
+            - Word count + writing timer
+            - Auto-saved drafts survive crashes and restarts
+            - Save to a folder of your choice as a dated `.md`
+            - Current-line editing: ⌫ char, ⌥⌫ word, ⌘⌫ wipe line. Committed lines stay locked.
+
+            ### Install
+            1. Download `type-*-universal.dmg` below
+            2. Open it, drag **type** into Applications
+            3. First launch: right-click the app → Open → confirm (build is unsigned; Gatekeeper will ask once)

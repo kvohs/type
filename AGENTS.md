@@ -39,31 +39,37 @@ Kelly likes it as one file.
 
 ## The release loop
 
-From a change ready on `main`:
+Kelly's contract: "I don't want to do any work at all. Agents handle it." So
+agents own this end-to-end. From a change ready on `main`:
 
 ```
-# 1. bump the version
-# edit package.json "version" — patch for fixes, minor for features
-
-# 2. commit, tag, push
+# 1. bump package.json "version" — patch for fixes, minor for features
+# 2. add a new section at the TOP of CHANGELOG.md (under the v1.4.0 example):
+#    - copy the format exactly (### New / ### Improved / ### Fixed)
+#    - user-facing language, not commit-speak
+# 3. commit, tag, push
 git add -A && git commit -m "..."
 git tag vX.Y.Z
 git push origin main && git push origin vX.Y.Z
 
-# 3. wait ~5-10 min for the workflow (builds, signs, notarizes, drafts release)
+# 4. wait for the workflow (builds, signs, notarizes, drafts release ~5-10 min)
 gh run watch -R kvohs/type
 
-# 4. publish the draft as Latest
-gh release edit vX.Y.Z -R kvohs/type --draft=false --latest
+# 5. publish the draft with the CHANGELOG body
+NOTES=$(awk '/^## v/{n++} n==1' CHANGELOG.md | sed '1,/^## v/d')   # body of newest section
+gh release edit vX.Y.Z -R kvohs/type \
+  --notes "$NOTES" --draft=false --latest
 ```
 
-That's it. From v1.3.0 forward, running instances of type detect the new
-release within 5 seconds of launch (and every 6 hours after), download in the
-background, and prompt the user on quit. No manual download needed.
+The auto-updater on running instances detects the new release within 5
+seconds of launch (and every 6 hours after), downloads in the background,
+and prompts the user on quit. No manual download needed.
 
-The kellyvohs.com/type page points at a permanent redirect `/type/download`
-→ `releases/latest/download/type-universal.dmg`, so it never needs updating
-per release.
+The kellyvohs.com/type page fetches the latest 5 release bodies live from
+the GitHub API and renders them below the copy — so once a release is
+published with `--draft=false`, it appears there on the next page load. No
+re-deploy of kellyvohs.com per release. The download button itself uses a
+permanent redirect (`/type/download` → `releases/latest/download/...`).
 
 ## Signing + notarization
 

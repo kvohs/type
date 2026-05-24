@@ -130,7 +130,10 @@
     transition: transform .15s cubic-bezier(.22,.61,.25,1);
     will-change: transform;
   }
-  .feed-inner.eject { transition: transform .62s cubic-bezier(.5,0,.75,0) !important; }
+  /* on save: page pulls off the platen — gentle engaged motion at first
+     (you can see the paper start to come up), then accelerates and rips
+     out at the end. easeInQuart curve. */
+  .feed-inner.eject { transition: transform .55s cubic-bezier(.895,.03,.685,.22) !important; }
   /* a frozen copy of the welcome that fades in place while the quote types in fresh */
   .feed-inner.ghost { position: absolute; left: 0; right: 0; top: 0; transition: opacity .8s ease, transform .8s ease; pointer-events: none; }
 
@@ -141,6 +144,18 @@
   }
   .line.intro-line { white-space: nowrap; }
   .line.attrib { font-size: 12px; letter-spacing: .04em; color: var(--ink-quiet); }
+  /* passive markdown: line-level only, never inline. The literal chars
+     (`> `, `- `, `# `) stay visible — we just dress up structure that's
+     already there. No bold/italic from `**`/`_` inside a line. */
+  .line.md-quote {
+    font-style: italic;
+    color: var(--ink-soft);
+    border-left: 2px solid var(--ink-faint);
+    padding-left: .55em;
+    margin-left: -.7em;            /* keeps the text column aligned with regular lines */
+  }
+  .line.md-bullet { padding-left: 1.2em; text-indent: -1.2em; }
+  .line.md-heading { font-weight: 700; letter-spacing: .05em; color: var(--ink); }
   .line.cr { animation: carriage .24s cubic-bezier(.2,.8,.3,1); }
   .line.welcome-fade { animation: welcomeFade .7s ease forwards; }
   @keyframes welcomeFade { to { opacity: 0; } }
@@ -233,23 +248,42 @@
     transform-origin: 50% 60%;
     will-change: opacity, color, transform;   /* no per-char blur — that was the jank */
   }
-  /* char & smolder: ink → ember → charred black → gone, drifting up in place */
+  /* char & smolder: ink → ember → charred black → gone, fading in place.
+     (Previously each char drifted up by a random Y, which made the whole
+      block look squiggly. Stagger of timing per char still gives the
+      uneven-burning feel without the jiggle.) */
   @keyframes burn-char {
-    0%   { color: var(--ink); opacity: 1; transform: translateY(0); text-shadow: none; }
+    0%   { color: var(--ink); opacity: 1; text-shadow: none; }
     28%  { color: var(--ember); text-shadow: 0 0 7px rgba(176,95,74,.5); }
     60%  { color: #2a1a12; text-shadow: none; }
-    100% { color: rgba(20,12,8,0); opacity: 0; transform: translateY(var(--y, -8px)); }
+    100% { color: rgba(20,12,8,0); opacity: 0; }
   }
+  /* spark after the burn — fixed fire-orange across every theme. Sparks
+     are sparks: they're not the wordmark's themed accent, they're the
+     thing the wordmark's orange dot was inspired by. Quiet, brief, just
+     enough presence to read as a spark on any paper color.
+     Motion uses offset-path (a per-spark bezier curve set inline in JS)
+     so the element glides along a smooth curve with a single easing —
+     no waypoint kinks, no per-segment velocity dips. */
   .ember {
-    position: absolute; width: 3px; height: 3px; border-radius: 999px;
-    background: var(--ember); box-shadow: 0 0 12px rgba(176,95,74,.65);
+    --spark: #ff6a1f;
+    position: absolute; width: 2px; height: 2px; border-radius: 999px;
+    background: var(--spark);
+    box-shadow:
+      0 0 1px var(--spark),
+      0 0 5px color-mix(in srgb, var(--spark) 55%, transparent);
     opacity: 0; z-index: 6; pointer-events: none;
-    animation: ember 850ms ease-out forwards;
+    offset-rotate: 0deg;                            /* don't rotate the dot to face the path */
+    animation: ember 850ms cubic-bezier(.18, .6, .35, 1) forwards;
   }
+  /* The element glides along its inline offset-path. offset-distance
+     drives position; opacity and scale layer on top for fade and flicker.
+     Single-segment interpolation per property = continuous velocity. */
   @keyframes ember {
-    0%   { opacity: 0; transform: translate(0, 12px) scale(.4); }
-    20%  { opacity: 1; }
-    100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(.1); }
+    0%   { offset-distance: 0%;   opacity: 0;   transform: scale(.55); }
+    16%  {                        opacity: 1;   transform: scale(1); }
+    65%  {                        opacity: .55; transform: scale(.92); }
+    100% { offset-distance: 100%; opacity: 0;   transform: scale(.35); }
   }
   .smoke {
     position: absolute; width: 180px; height: 180px; border-radius: 50%;
@@ -439,7 +473,7 @@
     text-transform: uppercase; color: var(--ink-quiet); user-select: none;
   }
   .setstats span:empty { display: none; }
-  .setstats:has(> *:empty:nth-child(1)):has(> *:empty:nth-child(2)) { display: none; }
+  .setstats:has(> *:empty:nth-child(1)):has(> *:empty:nth-child(2)):has(> *:empty:nth-child(3)) { display: none; }
   .info {
     position: relative;
     display: inline-flex; align-items: center; justify-content: center;
@@ -514,7 +548,7 @@
 
   <div class="settings" id="settings" hidden>
     <div class="settings-title">settings</div>
-    <div class="setstats" id="setStats" aria-hidden="true"><span id="setStatsWords"></span><span id="setStatsTime"></span></div>
+    <div class="setstats" id="setStats" aria-hidden="true"><span id="setStatsWords"></span><span id="setStatsPages"></span><span id="setStatsTime"></span></div>
     <div class="setrow setrow-seg">
       <span class="seg" id="themePick" role="radiogroup" aria-label="Theme">
         <button type="button" class="seg-opt" data-theme="">light</button>
@@ -528,6 +562,7 @@
     <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top <span class="info" tabindex="0">i<span class="tip">Keeps the type window above all others. Good for jotting while reading something else.</span></span></span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
     <label class="setrow"><span>Burn if I stop</span><span class="setpick burnsecs" id="burnAfterVal" hidden>10s</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
     <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
+    <label class="setrow"><span>Pages</span><input type="checkbox" id="setPages" /><span class="sw"></span></label>
     <label class="setrow"><span>Timer</span><input type="checkbox" id="setTimer" /><span class="sw"></span></label>
     <div class="setdiv"></div>
     <label class="setrow"><span>Sound</span><input type="checkbox" id="setSound" /><span class="sw"></span></label>
@@ -599,7 +634,7 @@
   }
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: true, smolderSecs: 10, wordCount: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -607,7 +642,7 @@
   const applyTheme = () => {
     THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
@@ -616,7 +651,7 @@
       if (k === 'zen')   applyZen();
       if (k === 'onTop') applyOnTop();
       if (k === 'smolder') { if (settings.smolder) scheduleSmolder(); else coolSmolder(); updateBurnAfter(); }
-      if (k === 'wordCount' || k === 'timer') updateMeter();
+      if (k === 'wordCount' || k === 'pages' || k === 'timer') updateMeter();
       if (k === 'sound') applySoundDetails();
     });
   });
@@ -1064,6 +1099,26 @@
   // the app opens with this every launch (after the first-run welcome)
   const OPENER = { text: "Most of us have two lives: the life we live, and the unlived life within us. Between the two stands Resistance.", author: "Steven Pressfield", source: "The War of Art" };
 
+  // Passive markdown — line-level only, applied as a CSS class. Recognized:
+  //   "> "       → md-quote   (italic, indented, left rule)
+  //   "- " "* "  → md-bullet  (hanging indent so the marker sits in the margin)
+  //   "# " "## " → md-heading (bolder, slightly tracked)
+  // Inline patterns like **bold** are intentionally NOT parsed — that would
+  // require splitting mid-word and turn the typewriter into a WYSIWYG editor.
+  const MD_CLASSES = ['md-quote', 'md-bullet', 'md-heading'];
+  function mdClassFor(text) {
+    if (!text) return null;
+    if (/^#{1,6} /.test(text)) return 'md-heading';
+    if (/^> /.test(text))      return 'md-quote';
+    if (/^[-*] /.test(text))   return 'md-bullet';
+    return null;
+  }
+  function applyMdClass(el, text) {
+    el.classList.remove(...MD_CLASSES);
+    const c = mdClassFor(text);
+    if (c) el.classList.add(c);
+  }
+
   function wrapText(text, cols) {
     const out = [];
     let line = '';
@@ -1110,6 +1165,7 @@
     for (const ln of out) {
       const el = document.createElement('div');
       el.className = 'line';
+      applyMdClass(el, ln);
       for (const c of ln) el.appendChild(inkSpan(c));
       feed.appendChild(el);
     }
@@ -1305,6 +1361,7 @@
       feed.appendChild(activeEl);
     }
     if (cr) activeEl.classList.add('cr');
+    applyMdClass(activeEl, current);            // live: style snaps on as soon as "# ", "> ", or "- " is typed
     renderInto(activeEl, current, accentPeriod);
     activeEl.appendChild(caretEl());
   }
@@ -1425,29 +1482,68 @@
     feed.classList.add('eject');
     requestAnimationFrame(() => { feed.style.transform = 'translateY(-130vh)'; });
 
+    // Stamp pops in just after the lift completes (lift = 550ms with the
+    // pull-then-rip curve), so it lands on a clean empty platen — not over
+    // the page. Stamp animation is 2.0s; cleanup waits past that.
     setTimeout(() => {
       stampDate.textContent = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase().replace(/,/g,'');
       stampKept.textContent = words === 1 ? '1 word kept' : `${words} words kept`;
       stampEl.classList.remove('show'); void stampEl.offsetWidth;
       stampEl.classList.add('show');
       bell(0.1);
-    }, 520);
+    }, 620);
 
-    setTimeout(() => { stampEl.classList.remove('show'); newSheet(); frozen = false; }, 2620);
+    setTimeout(() => { stampEl.classList.remove('show'); newSheet(); frozen = false; }, 2720);
   }
 
   /* ================= BURN (ember + smoke + stillness) ================= */
   function makeEmbers() {
-    for (let i = 0; i < 24; i++) {
+    // sparks rise from across the burning text — not all from one row.
+    // Spawn Y is random across the visible text's Y range (first char's
+    // top → last char's bottom), biased toward the top with pow(rand, 1.6)
+    // so most embers come from higher up where the older lines are.
+    const allChars = feed.querySelectorAll('.ch');
+    const firstRect = allChars.length ? allChars[0].getBoundingClientRect() : feed.getBoundingClientRect();
+    const lastRect  = allChars.length ? allChars[allChars.length - 1].getBoundingClientRect() : firstRect;
+    const colRect   = feed.getBoundingClientRect();
+    const vh = window.innerHeight, vw = window.innerWidth;
+    const topPct    = (firstRect.top    / vh) * 100;
+    const bottomPct = (lastRect.bottom  / vh) * 100;
+    const ySpanPct  = Math.max(0, bottomPct - topPct);
+    const colLeftPct  = (colRect.left  / vw) * 100;
+    const colWidthPct = ((colRect.right - colRect.left) / vw) * 100;
+    for (let i = 0; i < 12; i++) {
       const e = document.createElement('span');
       e.className = 'ember';
-      e.style.left = (12 + Math.random() * 64) + '%';
-      e.style.top  = (28 + Math.random() * 34) + '%';
-      e.style.setProperty('--x', (Math.random() * 92 - 46).toFixed(1) + 'px');
-      e.style.setProperty('--y', (-52 - Math.random() * 104).toFixed(1) + 'px');
-      e.style.animationDelay = (Math.random() * 430) + 'ms';
+      e.style.left = (colLeftPct + Math.random() * colWidthPct) + '%';
+      e.style.top  = (topPct + Math.pow(Math.random(), 1.6) * ySpanPct) + '%';
+      // three kinds of sparks, roughly:
+      //   ~2/12 floaters   — barely rise, hang in a pocket of warm air
+      //   ~3/12 lingerers  — climb medium-high, slow burn
+      //   ~7/12 regulars   — short curve up and out
+      const kind = Math.random();
+      let rise, dur;
+      if (kind < 0.18) {                       // floater
+        rise = 25  + Math.random() * 55;       // 25 → 80px
+        dur  = 3100 + Math.random() * 1600;    // 15% faster than before
+      } else if (kind < 0.42) {                // lingerer
+        rise = 220 + Math.random() * 200;      // 220 → 420px
+        dur  = 3300 + Math.random() * 1400;
+      } else {                                 // regular
+        rise = 90  + Math.random() * 160;      // 90 → 250px
+        dur  = 2100 + Math.random() * 950;
+      }
+      const drift = (Math.random() * 110 - 55);                   // ±55px lateral end position
+      // per-spark bezier curve: control point biases the path one way then
+      // the other so each ember has its own gentle wander. The randomized
+      // control X/Y means no two sparks share the same trajectory.
+      const ctrlX = drift * (0.2 + Math.random() * 0.5) + (Math.random() - 0.5) * 28;
+      const ctrlY = -rise * (0.28 + Math.random() * 0.18);
+      e.style.offsetPath = `path("M 0 0 Q ${ctrlX.toFixed(1)} ${ctrlY.toFixed(1)}, ${drift.toFixed(1)} ${(-rise).toFixed(1)}")`;
+      e.style.animationDuration = dur + 'ms';
+      e.style.animationDelay = (Math.random() * 600) + 'ms';
       stage.appendChild(e);
-      setTimeout(() => e.remove(), 1300);
+      setTimeout(() => e.remove(), Math.round(dur + 700));
     }
   }
   function makeSmoke() {
@@ -1600,11 +1696,13 @@
     chars.forEach((s, i) => {
       s.classList.add('ash');
       s.style.setProperty('--delay', Math.min(700, i * 4 + Math.random() * 160) + 'ms');
-      s.style.setProperty('--y', (-5 - Math.random() * 7).toFixed(1) + 'px');
+      // no per-char Y drift — chars fade in place; the timing stagger above
+      // is what gives the burn its uneven, paper-charring character
     });
     whoosh();
     makeEmbers();
-    setTimeout(makeSmoke, 600);
+    // no smoke puffs — the sparks carry the moment on their own, and they
+    // echo the burnt-orange period in the wordmark
     setTimeout(() => {
       newSheet(); frozen = false;
       if (settings.quoteBurn) setTimeout(seedQuote, 450);   // a quote types in after the burn, then rolls up as you write
@@ -1713,6 +1811,7 @@
     for (const ln of locked) {
       const el = document.createElement('div');
       el.className = 'line';
+      applyMdClass(el, ln);
       for (const c of ln) el.appendChild(inkSpan(c));
       feed.appendChild(el);
     }
@@ -1727,11 +1826,17 @@
   // Live counts only appear inside the settings panel's session-stats line,
   // and only when the matching toggle is on — the writing surface stays clean.
   const setStatsWords = document.getElementById('setStatsWords');
+  const setStatsPages = document.getElementById('setStatsPages');
   const setStatsTime  = document.getElementById('setStatsTime');
+  // Standard manuscript page = 250 words. Conveniently also the 3-pages-a-day
+  // target that long-form freewriting traditions converge on (750 words).
+  const WORDS_PER_PAGE = 250;
   function ensureClock() { if (sheetStart === null) sheetStart = Date.now(); }
   function updateMeter() {
     const n = ((locked.slice(userFloor).join(' ') + ' ' + current).match(/\S+/g) || []).length;
     const wordsText = n === 1 ? '1 word' : n + ' words';
+    const p = n / WORDS_PER_PAGE;
+    const pagesText = p.toFixed(1) + (p === 1 ? ' page' : ' pages');
     // Always show a clock face; reads "0:00" until the first keystroke starts
     // the session, then ticks. Without this fallback the timer toggle would
     // look broken (blank) when the settings panel opens before any typing.
@@ -1741,7 +1846,8 @@
       timeText = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
     }
     setStatsWords.textContent = settings.wordCount ? wordsText : '';
-    setStatsTime.textContent  = settings.timer ? timeText : '';
+    setStatsPages.textContent = settings.pages     ? pagesText : '';
+    setStatsTime.textContent  = settings.timer     ? timeText  : '';
   }
   setInterval(updateMeter, 1000);
 
@@ -2019,7 +2125,7 @@
     if (e.key === 'Backspace') {
       e.preventDefault();
       if (current.length > 0) {
-        if (e.altKey) current = current.replace(/\s*\S+\s*$/, '');   // ⌥⌫ — drop the previous word
+        if (e.altKey) current = current.replace(/\S+\s*$/, '');     // ⌥⌫ — drop the previous word, keep the space before it
         else current = current.slice(0, -1);                          // plain ⌫ — drop one character
         renderActive(); thock();
       }

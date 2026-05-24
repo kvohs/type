@@ -105,6 +105,17 @@
     width: 100%; height: 100%;
   }
 
+  /* Invisible drag handle along the top of the window. With titleBarStyle:
+     "hiddenInset" there's no chrome to grab when the window gets small —
+     this strip gives macOS a draggable region. Transparent, no visual,
+     just lets you grab and move the window from the top edge. The 78px
+     left offset clears the traffic lights so they keep working. */
+  .window-drag {
+    position: fixed; top: 0; left: 78px; right: 0; height: 28px;
+    -webkit-app-region: drag;
+    z-index: 50;
+  }
+
   /* ---------- typing window ---------- */
   .platen {
     position: absolute; inset: 0;
@@ -140,7 +151,11 @@
   .line {
     min-height: var(--line-h);
     white-space: pre-wrap;
-    word-break: break-word;
+    /* overflow-wrap: break-word — only break mid-word as a last resort.
+       word-break: break-word (its more aggressive cousin) used to split
+       short words like "how" into "ho" / "w" when MAX_COLS was a hair
+       off vs the real container width. */
+    overflow-wrap: break-word;
   }
   .line.intro-line { white-space: nowrap; }
   .line.attrib { font-size: 12px; letter-spacing: .04em; color: var(--ink-quiet); }
@@ -517,6 +532,7 @@
 </style>
 </head>
 <body>
+  <div class="window-drag" aria-hidden="true"></div>
   <div class="stage" id="stage">
     <div class="platen">
       <div class="feed"><div class="feed-inner" id="feed"></div></div>
@@ -777,8 +793,11 @@
   function computeCols() {
     const w = feed.parentElement.getBoundingClientRect().width;
     const fs = parseFloat(getComputedStyle(feed).fontSize) || 18;
-    const charW = 0.6 * fs;                     // Courier advance width
-    MAX_COLS = Math.max(16, Math.floor(w / charW) - 1);
+    const charW = 0.6 * fs;                     // Courier advance width estimate
+    // -2 char safety margin: Courier Prime renders slightly wider than the
+    // 0.6 estimate, so a -1 margin occasionally let JS think one more char
+    // would fit than actually does, causing visible CSS mid-word wraps.
+    MAX_COLS = Math.max(16, Math.floor(w / charW) - 2);
     BELL_AT  = Math.max(8, MAX_COLS - 6);
   }
 
@@ -1132,41 +1151,80 @@
     return out;
   }
 
-  // Re-wrap the user-typed portion of the page to the current MAX_COLS, so
-  // resizing the window doesn't leave old narrow auto-wraps stranded against
-  // the left edge of a wider centered column. Empty lines are preserved as
-  // paragraph breaks; the welcome/quote section above userFloor is left alone.
+  // Re-wrap committed text to the current MAX_COLS on resize, so the writing
+  // column stays centered regardless of what width it was originally typed
+  // at. Reflows both the seeded quote (preserving body / attribution split)
+  // and user-typed paragraphs (preserving blank-line paragraph breaks).
   let lastMaxCols = MAX_COLS;
   function reflowLocked() {
     if (phase !== 'writing') return;
     if (cursor !== null || quotePlaying) return;       // mid-overstrike or mid-typed-quote: skip
     if (lastMaxCols === MAX_COLS) return;
     lastMaxCols = MAX_COLS;
-    if (locked.length <= userFloor) return;
+    if (locked.length === 0) return;
 
+    // --- 1. Reflow the seeded quote portion, if any ---
+    // Read body vs attribution from existing DOM classes (set by seedQuote).
+    let attribCount = 0;
+    const newQuote = [];
+    if (userFloor > 0) {
+      const bodyTxt = [];
+      const attribTxt = [];
+      for (let i = 0; i < userFloor; i++) {
+        const txt = locked[i];
+        if (txt === '') continue;                       // skip gaps, regenerate
+        const el = feed.children[i];
+        if (el && el.classList.contains('attrib')) attribTxt.push(txt);
+        else bodyTxt.push(txt);
+      }
+      if (bodyTxt.length) {
+        for (const l of wrapText(bodyTxt.join(' '), MAX_COLS)) newQuote.push(l);
+      }
+      if (attribTxt.length) {
+        const wrapped = wrapText(attribTxt.join(' '), MAX_COLS);
+        attribCount = wrapped.length;
+        for (const l of wrapped) newQuote.push(l);
+      }
+      newQuote.push('');                                // trailing gap before user writing
+    }
+
+    // --- 2. Reflow the user-typed portion, preserving paragraph breaks ---
     const user = locked.slice(userFloor);
-    const out = [];
+    const newUser = [];
     let para = [];
     const flush = () => {
       if (!para.length) return;
-      for (const l of wrapText(para.join(' '), MAX_COLS)) out.push(l);
+      for (const l of wrapText(para.join(' '), MAX_COLS)) newUser.push(l);
       para = [];
     };
     for (const ln of user) {
-      if (ln === '') { flush(); out.push(''); }
+      if (ln === '') { flush(); newUser.push(''); }
       else para.push(ln);
     }
     flush();
 
-    if (out.length === user.length && out.every((l, i) => l === user[i])) return;
+    const newLocked = newQuote.concat(newUser);
+    const newUserFloor = newQuote.length;
 
-    locked = locked.slice(0, userFloor).concat(out);
-    while (feed.children.length > userFloor) feed.removeChild(feed.lastChild);
-    for (const ln of out) {
+    // No-op if nothing actually changed
+    if (newUserFloor === userFloor && newLocked.length === locked.length && newLocked.every((l, i) => l === locked[i])) return;
+
+    locked = newLocked;
+    userFloor = newUserFloor;
+    if (quoteHold) quoteHold.floor = userFloor;
+
+    // --- 3. Rebuild the feed DOM from the new locked array ---
+    feed.innerHTML = '';
+    const attribStart = userFloor - 1 - attribCount;    // first index of attribution band
+    for (let i = 0; i < locked.length; i++) {
       const el = document.createElement('div');
       el.className = 'line';
-      applyMdClass(el, ln);
-      for (const c of ln) el.appendChild(inkSpan(c));
+      if (i < userFloor) {
+        el.classList.add('quoteline');
+        if (i >= attribStart && i < userFloor - 1 && locked[i] !== '') el.classList.add('attrib');
+      }
+      applyMdClass(el, locked[i]);
+      for (const c of locked[i]) el.appendChild(inkSpan(c));
       feed.appendChild(el);
     }
     activeEl = null;
@@ -2155,8 +2213,22 @@
 
   computeCols();
   const recovered = readDraft();
-  if (recovered && (recovered.locked.length || recovered.current)) restoreDraft(recovered);
-  else runIntro();
+  if (recovered && (recovered.locked.length || recovered.current)) {
+    restoreDraft(recovered);
+  } else {
+    // Defer the intro until the main process has actually shown the window,
+    // so the user sees "type." typing out from the first frame instead of
+    // catching it mid-animation. Fallback fires if the IPC never lands
+    // (browser preview, dev reload, etc.) so the intro still plays.
+    let started = false;
+    const start = () => { if (!started) { started = true; runIntro(); } };
+    if (window.typeAPI && window.typeAPI.onReady) {
+      window.typeAPI.onReady(start);
+      setTimeout(start, 1500);   // safety net
+    } else {
+      start();
+    }
+  }
 })();
 </script>
 </body>

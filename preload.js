@@ -23,4 +23,12 @@ contextBridge.exposeInMainWorld('typeAPI', {
     ipcRenderer.on('type:fullscreen-changed', handler);
     return () => ipcRenderer.off('type:fullscreen-changed', handler);
   },
+  // fires once when the main process has called win.show() — used by the
+  // renderer to defer the intro animation until the window is actually
+  // visible, so the user always sees "type." typing out from the start
+  onReady: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.once('type:ready', handler);
+    return () => ipcRenderer.off('type:ready', handler);
+  },
 });

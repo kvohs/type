@@ -6,6 +6,18 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.4.1
+
+### Improved
+- **Launch feels intentional.** The window now stays hidden until first paint is ready, then appears with the "type." wordmark animation running from the top. No more white flash, no more catching the intro mid-animation — the window opening *is* the wordmark reveal.
+- **Window dragging in small sizes.** Added an invisible drag region along the top of the window so you can always grab and move it, even at narrow widths where there's no chrome to grab onto.
+
+### Fixed
+- **No more mid-word splits on resize.** A word like "how" used to occasionally render as "ho / w" when the window was sized just-so. The CSS now only breaks mid-word as a last resort, and the column math has a touch more headroom so the JS-wrapped lines reliably fit the visual container.
+- **Seeded opening quotes re-center on resize.** Previously only your own typing reflowed when you resized the window; the quote on launch stayed at its original wrap, drifting left when the window grew. The quote now reflows with you, preserving body / attribution styling.
+
+---
+
 ## v1.4.0
 
 ### New

@@ -22,12 +22,24 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',   // mac: keep the traffic lights, drop the title bar
     title: 'type',
     icon: path.join(__dirname, 'build', 'icon.icns'),
+    // Hide until first paint is ready so the user never sees the white-flash-
+    // then-theme handover. The dock icon is already "active" while we wait;
+    // when the window finally appears it appears fully formed.
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       additionalArguments: [`--type-version=${APP_VERSION}`],
     },
+  });
+
+  // Show only after first paint, and tell the renderer the moment we do so
+  // it can start the intro animation from the beginning — the window opening
+  // *is* the wordmark reveal.
+  win.once('ready-to-show', () => {
+    win.show();
+    win.webContents.send('type:ready');
   });
 
   win.loadFile(path.join(__dirname, 'index.html'));

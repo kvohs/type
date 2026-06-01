@@ -56,6 +56,8 @@ git push origin main && git push origin vX.Y.Z
 gh run watch -R kvohs/type
 
 # 5. publish the draft with the CHANGELOG body
+#    The CHANGELOG section IS the whole body. Don't append install steps or a
+#    signing / notarization / auto-update footer — that's plumbing, not notes.
 NOTES=$(awk '/^## v/{n++} n==1' CHANGELOG.md | sed '1,/^## v/d')   # body of newest section
 gh release edit vX.Y.Z -R kvohs/type \
   --notes "$NOTES" --draft=false --latest
@@ -168,3 +170,9 @@ prefs in localStorage; only first-launch is affected.
 - Don't use LANCZOS for icon downsampling (see Icon section).
 - Don't add cross-platform builds (Win/Linux) without an explicit ask. type
   is Mac-only by design.
+- Don't pad release notes with plumbing. No install steps ("Download the dmg,
+  drag to Applications…") and no signing / notarization / auto-update footer
+  ("Signed with a Developer ID … notarized by Apple. Existing installs
+  auto-update on next launch."). Existing users auto-update — they're not
+  reinstalling — and every build is signed. Notes = what actually changed (the
+  CHANGELOG section), nothing more.

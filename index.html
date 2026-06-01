@@ -93,6 +93,10 @@
     text-rendering: optimizeLegibility;
     transition: background-color .35s ease, color .35s ease;
   }
+  /* hide the mouse pointer while the keyboard is in use — keeps it from
+     hovering in the middle of the page when you tab back from another app.
+     Any mouse movement brings it right back. */
+  body.cursor-idle, body.cursor-idle * { cursor: none !important; }
 
   /* a whisper of vignette on every theme — a little focus, a little age (sits behind the text) */
   body::before {
@@ -159,18 +163,42 @@
   }
   .line.intro-line { white-space: nowrap; }
   .line.attrib { font-size: 12px; letter-spacing: .04em; color: var(--ink-quiet); }
-  /* passive markdown: line-level only, never inline. The literal chars
-     (`> `, `- `, `# `) stay visible — we just dress up structure that's
-     already there. No bold/italic from `**`/`_` inside a line. */
+  /* passive markdown: line-level only, never inline. Literal markers
+     (`> `, `- `/`* `, `# `…`###### `) stay in the buffer so saved .md is
+     valid — the hide-marker rule below suppresses them in render. Wrap
+     continuations carry a 2-space prefix so resize and reload preserve
+     the styling. No bold/italic from `**`/`_` inside a line. */
   .line.md-quote {
     font-style: italic;
     color: var(--ink-soft);
     border-left: 2px solid var(--ink-faint);
-    padding-left: .55em;
-    margin-left: -.7em;            /* keeps the text column aligned with regular lines */
+    padding-left: .9em;
+    margin-left: .8em;
   }
-  .line.md-bullet { padding-left: 1.2em; text-indent: -1.2em; }
-  .line.md-heading { font-weight: 700; letter-spacing: .05em; color: var(--ink); }
+  .line.md-bullet, .line.md-bullet-cont {
+    position: relative;
+    padding-left: 1.2em;
+  }
+  .line.md-bullet::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--ink-soft);
+  }
+  .line.md-heading, .line.md-heading-cont {
+    font-weight: 700;
+    letter-spacing: .05em;
+    color: var(--ink);
+  }
+  /* hide the literal marker chars — kept in the buffer for saved markdown,
+     suppressed in render so the line reads like a real blockquote / list /
+     heading. data-md-marker is the number of leading char spans to hide. */
+  .line[data-md-marker="2"] > .ch:nth-child(-n+2),
+  .line[data-md-marker="3"] > .ch:nth-child(-n+3),
+  .line[data-md-marker="4"] > .ch:nth-child(-n+4),
+  .line[data-md-marker="5"] > .ch:nth-child(-n+5),
+  .line[data-md-marker="6"] > .ch:nth-child(-n+6),
+  .line[data-md-marker="7"] > .ch:nth-child(-n+7) { display: none; }
   .line.cr { animation: carriage .24s cubic-bezier(.2,.8,.3,1); }
   .line.welcome-fade { animation: welcomeFade .7s ease forwards; }
   @keyframes welcomeFade { to { opacity: 0; } }
@@ -1119,23 +1147,41 @@
   const OPENER = { text: "Most of us have two lives: the life we live, and the unlived life within us. Between the two stands Resistance.", author: "Steven Pressfield", source: "The War of Art" };
 
   // Passive markdown — line-level only, applied as a CSS class. Recognized:
-  //   "> "       → md-quote   (italic, indented, left rule)
-  //   "- " "* "  → md-bullet  (hanging indent so the marker sits in the margin)
-  //   "# " "## " → md-heading (bolder, slightly tracked)
-  // Inline patterns like **bold** are intentionally NOT parsed — that would
-  // require splitting mid-word and turn the typewriter into a WYSIWYG editor.
-  const MD_CLASSES = ['md-quote', 'md-bullet', 'md-heading'];
-  function mdClassFor(text) {
+  //   "> "       → md-quote        (italic, indented, left rule; "> " hidden)
+  //   "- " / "* "→ md-bullet       (• glyph, hanging indent; marker hidden)
+  //   "# "…"###"→ md-heading       (bold, tracked; "#…# " hidden)
+  // Wrap continuations carry a 2-space prefix in the buffer and inherit the
+  // styling of the previous line as md-bullet-cont or md-heading-cont, so
+  // resize and reload preserve list/heading shape. Inline patterns like
+  // **bold** are intentionally NOT parsed — that would require splitting
+  // mid-word and turn the typewriter into a WYSIWYG editor.
+  const MD_CLASSES = ['md-quote', 'md-bullet', 'md-bullet-cont', 'md-heading', 'md-heading-cont'];
+  function mdInfo(text, prevEl) {
     if (!text) return null;
-    if (/^#{1,6} /.test(text)) return 'md-heading';
-    if (/^> /.test(text))      return 'md-quote';
-    if (/^[-*] /.test(text))   return 'md-bullet';
+    let m = text.match(/^(#{1,6}) /);
+    if (m) return { cls: 'md-heading', markerLen: m[0].length };
+    if (text.startsWith('> '))  return { cls: 'md-quote',   markerLen: 2 };
+    if (/^[-*] /.test(text))    return { cls: 'md-bullet',  markerLen: 2 };
+    // 2-space continuation inherits the prev line's md type
+    if (text.startsWith('  ') && prevEl) {
+      if (prevEl.classList.contains('md-heading') || prevEl.classList.contains('md-heading-cont')) {
+        return { cls: 'md-heading-cont', markerLen: 2 };
+      }
+      if (prevEl.classList.contains('md-bullet') || prevEl.classList.contains('md-bullet-cont')) {
+        return { cls: 'md-bullet-cont', markerLen: 2 };
+      }
+    }
     return null;
   }
   function applyMdClass(el, text) {
     el.classList.remove(...MD_CLASSES);
-    const c = mdClassFor(text);
-    if (c) el.classList.add(c);
+    const info = mdInfo(text, el.previousElementSibling);
+    if (info) {
+      el.classList.add(info.cls);
+      el.dataset.mdMarker = String(info.markerLen);
+    } else {
+      delete el.dataset.mdMarker;
+    }
   }
 
   function wrapText(text, cols) {
@@ -1189,19 +1235,66 @@
     }
 
     // --- 2. Reflow the user-typed portion, preserving paragraph breaks ---
+    // Each md block (blockquote / bullet item / heading) is unwrapped,
+    // rewrapped to its body width, then re-prefixed. Plain prose between
+    // blocks reflows as a single paragraph.
     const user = locked.slice(userFloor);
     const newUser = [];
-    let para = [];
-    const flush = () => {
-      if (!para.length) return;
-      for (const l of wrapText(para.join(' '), MAX_COLS)) newUser.push(l);
-      para = [];
+    let prose = [];
+    const flushProse = () => {
+      if (!prose.length) return;
+      for (const l of wrapText(prose.join(' '), MAX_COLS)) newUser.push(l);
+      prose = [];
     };
-    for (const ln of user) {
-      if (ln === '') { flush(); newUser.push(''); }
-      else para.push(ln);
+    let i = 0;
+    while (i < user.length) {
+      const ln = user[i];
+      if (ln === '') { flushProse(); newUser.push(''); i++; continue; }
+
+      // blockquote: run of consecutive "> " lines
+      if (ln.startsWith('> ')) {
+        flushProse();
+        const body = [];
+        while (i < user.length && user[i].startsWith('> ')) { body.push(user[i].slice(2)); i++; }
+        const wrapped = wrapText(body.join(' '), Math.max(4, MAX_COLS - 2));
+        for (const l of wrapped) newUser.push('> ' + l);
+        continue;
+      }
+
+      // heading: one "# … " line + any "  " continuations
+      let m = ln.match(/^(#{1,6}) /);
+      if (m) {
+        flushProse();
+        const markerLen = m[0].length;
+        const parts = [ln.slice(markerLen)];
+        i++;
+        while (i < user.length && user[i].startsWith('  ')) { parts.push(user[i].slice(2)); i++; }
+        const wrapped = wrapText(parts.join(' '), Math.max(4, MAX_COLS - markerLen));
+        if (!wrapped.length) wrapped.push('');
+        newUser.push(m[0] + wrapped[0]);
+        for (let j = 1; j < wrapped.length; j++) newUser.push('  ' + wrapped[j]);
+        continue;
+      }
+
+      // bullet item: one "- " / "* " line + any "  " continuations
+      m = ln.match(/^([-*]) /);
+      if (m) {
+        flushProse();
+        const marker = m[0];
+        const parts = [ln.slice(2)];
+        i++;
+        while (i < user.length && user[i].startsWith('  ')) { parts.push(user[i].slice(2)); i++; }
+        const wrapped = wrapText(parts.join(' '), Math.max(4, MAX_COLS - 2));
+        if (!wrapped.length) wrapped.push('');
+        newUser.push(marker + wrapped[0]);
+        for (let j = 1; j < wrapped.length; j++) newUser.push('  ' + wrapped[j]);
+        continue;
+      }
+
+      prose.push(ln);
+      i++;
     }
-    flush();
+    flushProse();
 
     const newLocked = newQuote.concat(newUser);
     const newUserFloor = newQuote.length;
@@ -1214,6 +1307,8 @@
     if (quoteHold) quoteHold.floor = userFloor;
 
     // --- 3. Rebuild the feed DOM from the new locked array ---
+    // applyMdClass inspects previousElementSibling for -cont detection,
+    // so the element must be parented before classes are applied.
     feed.innerHTML = '';
     const attribStart = userFloor - 1 - attribCount;    // first index of attribution band
     for (let i = 0; i < locked.length; i++) {
@@ -1223,9 +1318,9 @@
         el.classList.add('quoteline');
         if (i >= attribStart && i < userFloor - 1 && locked[i] !== '') el.classList.add('attrib');
       }
-      applyMdClass(el, locked[i]);
       for (const c of locked[i]) el.appendChild(inkSpan(c));
       feed.appendChild(el);
+      applyMdClass(el, locked[i]);
     }
     activeEl = null;
     renderActive();
@@ -1493,16 +1588,27 @@
       if (!bellRung && current.length === BELL_AT) { bellRung = true; if (settings.bell) bell(0.09); }
       return;
     }
+    // wrapped md lines carry a prefix on the carry-over so the continuation
+    // styles the same — blockquote uses "> " on every line, bullets/headings
+    // use a 2-space hang so saved markdown stays valid
+    let wrapPrefix = '';
+    if (activeEl) {
+      const cl = activeEl.classList;
+      if (cl.contains('md-quote')) wrapPrefix = '> ';
+      else if (cl.contains('md-bullet') || cl.contains('md-bullet-cont') ||
+               cl.contains('md-heading') || cl.contains('md-heading-cont')) wrapPrefix = '  ';
+    }
     const lastSpace = current.lastIndexOf(' ');
     if (c !== ' ' && lastSpace > MAX_COLS * 0.5) {
       const carry = current.slice(lastSpace + 1);
       current = current.slice(0, lastSpace);
       commitLine();
-      current = carry + c;
+      current = wrapPrefix + carry + c;
       renderActive();
     } else {
       commitLine();
-      if (c !== ' ') { current = c; renderActive(); }
+      if (c !== ' ') { current = wrapPrefix + c; renderActive(); }
+      else if (wrapPrefix) { current = wrapPrefix; renderActive(); }
     }
   }
 
@@ -1876,9 +1982,9 @@
     for (const ln of locked) {
       const el = document.createElement('div');
       el.className = 'line';
-      applyMdClass(el, ln);
       for (const c of ln) el.appendChild(inkSpan(c));
       feed.appendChild(el);
+      applyMdClass(el, ln);                  // after append so -cont can see prev sibling
     }
     activeEl = null;
     renderActive();
@@ -2097,9 +2203,23 @@
   /* ================= INPUT ================= */
   const NAV = ['ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Home','End','PageUp','PageDown'];
 
+  // hide the mouse pointer while you're typing — comes right back the moment
+  // you nudge the mouse, then re-hides after a short idle
+  let cursorIdleTimer = null;
+  const hideCursor = () => document.body.classList.add('cursor-idle');
+  const showCursor = () => {
+    document.body.classList.remove('cursor-idle');
+    clearTimeout(cursorIdleTimer);
+    cursorIdleTimer = setTimeout(hideCursor, 1500);
+  };
+  window.addEventListener('mousemove', showCursor, { passive: true });
+  window.addEventListener('mousedown', showCursor, { passive: true });
+  window.addEventListener('wheel',     showCursor, { passive: true });
+
   window.addEventListener('keydown', (e) => {
     const mod = e.metaKey || e.ctrlKey;
     unlockAudio();
+    if (!mod && e.key.length === 1) hideCursor();      // any printable keystroke tucks the pointer away
 
     if (e.key === 'Escape') {
       if (!settingsEl.hidden) { e.preventDefault(); settingsEl.hidden = true; return; }

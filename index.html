@@ -1537,8 +1537,15 @@
 
     const caret = feed.querySelector('.caret'); if (caret) caret.remove();
     zip(0.16, 0.42);                            // paper pulled from platen
+    // lift from wherever the sheet currently sits — on a long page layout() has
+    // already scrolled feed up to keep the active line centered, so an absolute
+    // target would pull the sheet *down* into view. read the current Y and lift
+    // another ~130vh past it: the whole sheet clears the top of the platen at any
+    // length, and this reduces to the old -130vh for a short page at translateY(0).
+    const m = /translateY\(([-\d.]+)px\)/.exec(feed.style.transform || '');
+    const currentY = m ? parseFloat(m[1]) : 0;
     feed.classList.add('eject');
-    requestAnimationFrame(() => { feed.style.transform = 'translateY(-130vh)'; });
+    requestAnimationFrame(() => { feed.style.transform = `translateY(${currentY - window.innerHeight * 1.3}px)`; });
 
     // Stamp pops in just after the lift completes (lift = 550ms with the
     // pull-then-rip curve), so it lands on a clean empty platen — not over

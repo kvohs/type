@@ -6,6 +6,13 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.4.2
+
+### Fixed
+- **Keeping a long page rolls it up, not down.** On a page taller than the window, ⌘S used to shove the sheet *downward* a moment before it vanished, instead of pulling it up and off the platen. The eject now lifts from wherever the page is scrolled to, so a kept page always rolls up and away like paper leaving a typewriter — and the date stamp lands on the clean platen behind it. Short pages behave exactly as before.
+
+---
+
 ## v1.4.1
 
 ### Improved

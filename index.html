@@ -1003,10 +1003,20 @@
       el.appendChild(s);
     }
   }
+  // how many leading chars of committed line i are hidden markdown markers
+  // ("- ", "> ", "# "…). Those spans are display:none, so the overstrike block
+  // cursor must never land on them — it would vanish and "type" invisibly over
+  // the marker. data-md-marker is exactly the count the CSS hide-rule suppresses.
+  function markerLen(i) {
+    const el = feed.children[i];
+    const n = el ? parseInt(el.dataset.mdMarker || '0', 10) : 0;
+    return n > 0 ? n : 0;
+  }
   function enterOverstrike() {
     if (locked.length === 0 || phase !== 'writing' || frozen || quotePlaying) return;
     const i = locked.length - 1;
-    cursor = { line: i, col: Math.min(current.length, locked[i].length) };
+    const lo = markerLen(i);
+    cursor = { line: i, col: Math.max(lo, Math.min(current.length, locked[i].length)) };
     stage.classList.add('overstriking');
     renderLockedLine(i);
     layout();
@@ -1021,7 +1031,7 @@
   }
   function overstrikeAt(i, c) {
     const t = locked[i];
-    if (c >= t.length) return;                        // past end of line — nothing to cover
+    if (c >= t.length || c < markerLen(i)) return;    // past end, or on a hidden md marker — nothing to cover
     if (t[c] !== 'x' && t[c] !== 'X') {
       locked[i] = t.slice(0, c) + 'x' + t.slice(c + 1);
     }
@@ -1034,7 +1044,7 @@
       if (cursor) {
         if (cursor.line > 0) {
           const prev = cursor.line; cursor.line--;
-          cursor.col = Math.min(cursor.col, locked[cursor.line].length);
+          cursor.col = Math.max(markerLen(cursor.line), Math.min(cursor.col, locked[cursor.line].length));
           renderLockedLine(prev); renderLockedLine(cursor.line); layout();
         }
       } else {
@@ -1046,7 +1056,7 @@
     } else if (key === 'ArrowLeft') {
       if (!cursor) return;
       const prev = cursor.line;
-      if (cursor.col > 0) cursor.col--;
+      if (cursor.col > markerLen(cursor.line)) cursor.col--;
       else if (cursor.line > 0) { cursor.line--; cursor.col = locked[cursor.line].length; }
       if (prev !== cursor.line) renderLockedLine(prev);
       renderLockedLine(cursor.line); layout();
@@ -1054,7 +1064,7 @@
       if (!cursor) return;
       const prev = cursor.line;
       if (cursor.col < locked[cursor.line].length) cursor.col++;
-      else if (cursor.line < locked.length - 1) { cursor.line++; cursor.col = 0; }
+      else if (cursor.line < locked.length - 1) { cursor.line++; cursor.col = markerLen(cursor.line); }
       else { exitOverstrike(); return; }
       if (prev !== cursor.line) renderLockedLine(prev);
       renderLockedLine(cursor.line); layout();
@@ -2290,7 +2300,7 @@
       if (e.key === 'Backspace') {
         e.preventDefault();
         const prev = cursor.line;
-        if (cursor.col > 0) cursor.col--;
+        if (cursor.col > markerLen(cursor.line)) cursor.col--;
         else if (cursor.line > 0) { cursor.line--; cursor.col = locked[cursor.line].length; }
         if (prev !== cursor.line) renderLockedLine(prev);
         renderLockedLine(cursor.line); layout();

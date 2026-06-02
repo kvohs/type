@@ -6,6 +6,17 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.5.0
+
+### Improved
+- **Markdown lines read like the real thing.** A line that starts with `> `, `- ` / `* `, or `# ` now hides the literal marker as you write — a quote shows just its left rule, a list item gets a real • bullet, a heading simply goes bold. The markers still live in the file underneath, so your saved `.md` stays valid and byte-faithful; they're only tucked out of sight on screen. Wrapped list and heading lines keep their shape through resize and reload.
+- **The pointer gets out of your way.** The mouse cursor now hides itself while you're typing, so it stops hovering in the middle of the page when you tab back from another app. Any nudge of the mouse brings it right back.
+
+### Fixed
+- **Editing a list, quote, or heading line from above works again.** Pressing ↑ to step back onto an earlier line and type over it used to break on any `- `, `> `, or `# ` line: the cursor landed on the now-hidden marker, became invisible, and keystrokes piled up on top of themselves — sometimes quietly mangling the line. The cursor now skips past the marker to the first real character, stays visible, and leaves the marker untouched.
+
+---
+
 ## v1.4.2
 
 ### Fixed

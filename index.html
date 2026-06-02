@@ -379,6 +379,29 @@
   }
   .feedback-paused.show { opacity: 1; }
 
+  /* quiet auto-update status — top-center, in the same caps-mono whisper as the
+     hints. Hidden until there's something to report; a thin accent bar fills as
+     the new version downloads, then it turns into a one-tap "restart". No modal,
+     no interruption — it still installs on its own on the next quit if ignored. */
+  .update {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 11; -webkit-app-region: no-drag;
+    display: none; flex-direction: column; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--ink-quiet); user-select: none;
+    opacity: 0; transition: opacity .4s ease;
+  }
+  .update.show { display: flex; opacity: 1; }
+  .update-bar { width: 170px; height: 2px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+  .update-bar.hide { display: none; }
+  .update-bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
+  .update-action {
+    appearance: none; background: none; border: 0; padding: 2px 4px;
+    font: inherit; letter-spacing: inherit; text-transform: inherit;
+    color: var(--accent); cursor: pointer; -webkit-app-region: no-drag;
+  }
+  .update-action:hover { text-decoration: underline; }
+
   /* small grey × to the right of a seeded quote — click to remove it */
   .quote-x {
     position: fixed; z-index: 9; display: none;
@@ -590,6 +613,8 @@
     </span>
   </div>
 
+  <div class="update" id="update" aria-live="polite"><div class="update-bar"><i></i></div><div class="update-text"></div></div>
+
   <div class="settings" id="settings" hidden>
     <div class="settings-title">settings</div>
     <div class="setstats" id="setStats" aria-hidden="true"><span id="setStatsWords"></span><span id="setStatsPages"></span><span id="setStatsTime"></span></div>
@@ -676,6 +701,51 @@
     whyBtn.addEventListener('click', () => { window.open('https://kellyvohs.com/type#why', '_blank', 'noopener'); });
     // feedback wiring is bound later, once enterFeedbackMode is defined
   }
+
+  // --- auto-update status (desktop only) ---
+  // A quiet, progress-aware replacement for the old stack of native modal
+  // dialogs. The new version downloads in the background; this shows how far
+  // along it is, then offers a one-tap restart. Ignoring it is fine — the
+  // update still installs on its own the next time you quit.
+  (function setupUpdate() {
+    const el = document.getElementById('update');
+    if (!el || !window.typeAPI || typeof window.typeAPI.onUpdate !== 'function') return;
+    const bar = el.querySelector('.update-bar');
+    const fill = el.querySelector('.update-bar > i');
+    const text = el.querySelector('.update-text');
+    let hideTimer = null;
+    const show = () => { clearTimeout(hideTimer); el.classList.add('show'); };
+    const hideAfter = (ms) => { clearTimeout(hideTimer); hideTimer = setTimeout(() => el.classList.remove('show'), ms); };
+    const setBar = (pct) => { bar.classList.remove('hide'); fill.style.width = Math.max(0, Math.min(100, Math.round(pct))) + '%'; };
+    const noBar = () => bar.classList.add('hide');
+
+    window.typeAPI.onUpdate((u) => {
+      u = u || {};
+      switch (u.state) {
+        case 'checking':
+          noBar(); text.textContent = 'checking for updates…'; show(); break;
+        case 'available':
+          setBar(0); text.textContent = 'downloading update…'; show(); break;
+        case 'progress':
+          setBar(u.percent || 0);
+          text.textContent = 'downloading update · ' + Math.round(u.percent || 0) + '%';
+          show(); break;
+        case 'ready': {
+          noBar(); text.textContent = '';
+          text.append(document.createTextNode((u.version ? 'type v' + u.version : 'update') + ' ready · '));
+          const btn = document.createElement('button');
+          btn.type = 'button'; btn.className = 'update-action'; btn.textContent = 'restart';
+          btn.addEventListener('click', () => { if (window.typeAPI.quitAndInstall) window.typeAPI.quitAndInstall(); });
+          text.append(btn);
+          show(); break;                          // persistent until restart or quit
+        }
+        case 'none':
+          noBar(); text.textContent = 'you’re up to date'; show(); hideAfter(2600); break;
+        case 'error':
+          noBar(); text.textContent = 'update check failed'; show(); hideAfter(3200); break;
+      }
+    });
+  })();
 
   /* ================= SETTINGS ================= */
   const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };

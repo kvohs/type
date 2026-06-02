@@ -31,4 +31,15 @@ contextBridge.exposeInMainWorld('typeAPI', {
     ipcRenderer.once('type:ready', handler);
     return () => ipcRenderer.off('type:ready', handler);
   },
+  // auto-update lifecycle on a single channel: { state: 'checking' |
+  // 'available' | 'progress' | 'ready' | 'none' | 'error', version?, percent?,
+  // message? }. The renderer turns it into a quiet progress toast. Returns an
+  // unsubscribe fn.
+  onUpdate: (cb) => {
+    const handler = (_e, payload) => cb(payload);
+    ipcRenderer.on('type:update', handler);
+    return () => ipcRenderer.off('type:update', handler);
+  },
+  // the "restart" affordance on a downloaded update — quit, install, relaunch
+  quitAndInstall: () => ipcRenderer.invoke('type:quit-and-install'),
 });

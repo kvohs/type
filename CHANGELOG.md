@@ -6,6 +6,13 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.5.1
+
+### Improved
+- **Updates show a progress bar instead of a stack of dialogs.** When a new version is downloading, a quiet bar at the top of the page fills as it goes, so you can actually see how far along it is — no more clicking "Check for Updates" again to find out. When it's ready, a single **restart** appears: one click installs it and reopens right where you left off. Checking from the menu gives instant feedback too. And if you'd rather not stop, just ignore it — the update still installs on its own the next time you quit.
+
+---
+
 ## v1.5.0
 
 ### Improved

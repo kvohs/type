@@ -58,7 +58,7 @@ gh run watch -R kvohs/type
 # 5. publish the draft with the CHANGELOG body
 #    The CHANGELOG section IS the whole body. Don't append install steps or a
 #    signing / notarization / auto-update footer — that's plumbing, not notes.
-NOTES=$(awk '/^## v/{n++} n==1' CHANGELOG.md | sed '1,/^## v/d')   # body of newest section
+NOTES=$(awk '/^## v/{n++} n==1 && !/^## v/ && !/^---$/' CHANGELOG.md)   # body of newest section
 gh release edit vX.Y.Z -R kvohs/type \
   --notes "$NOTES" --draft=false --latest
 ```

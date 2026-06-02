@@ -173,62 +173,51 @@ ipcMain.handle('type:save-note', async (_e, payload) => {
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
-// when set, the next update-{available,not-available,error} fires a dialog
-// so a manual "Check for Updates…" click always gives the user feedback
+// The renderer owns all update UX now — a quiet, progress-aware toast instead
+// of a stack of native modal dialogs. We just forward electron-updater's
+// lifecycle to it on one channel. `manualCheckInProgress` gates the chatty
+// states (checking / up-to-date / error) so a background check stays silent
+// unless it actually has a new version to download.
 let manualCheckInProgress = false;
 
-autoUpdater.on('update-available', (info) => {
-  if (manualCheckInProgress) {
-    const win = BrowserWindow.getAllWindows()[0];
-    dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'Update available',
-      message: `type ${info.version} is downloading.`,
-      detail: 'You’ll be prompted to install when the download finishes.',
-      buttons: ['OK'],
-    }).catch(() => {});
-    manualCheckInProgress = false;
-  }
+function sendUpdate(payload) {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win && !win.isDestroyed()) win.webContents.send('type:update', payload);
+}
+
+autoUpdater.on('checking-for-update', () => {
+  if (manualCheckInProgress) sendUpdate({ state: 'checking' });
 });
 
-autoUpdater.on('update-not-available', () => {
-  if (manualCheckInProgress) {
-    const win = BrowserWindow.getAllWindows()[0];
-    dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'You’re up to date',
-      message: `type ${APP_VERSION} is the latest version.`,
-      buttons: ['OK'],
-    }).catch(() => {});
-    manualCheckInProgress = false;
-  }
+autoUpdater.on('update-available', (info) => {
+  // both manual and background — from here the progress bar tells the story
+  sendUpdate({ state: 'available', version: info.version });
+  manualCheckInProgress = false;
+});
+
+autoUpdater.on('download-progress', (p) => {
+  sendUpdate({ state: 'progress', percent: p.percent });
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  const win = BrowserWindow.getAllWindows()[0];
-  dialog.showMessageBox(win, {
-    type: 'info',
-    title: 'type update ready',
-    message: `type ${info.version} is ready to install.`,
-    detail: 'The update applies the next time you quit and reopen type.',
-    buttons: ['OK'],
-    defaultId: 0,
-  }).catch(() => {});
+  sendUpdate({ state: 'ready', version: info.version });
+});
+
+autoUpdater.on('update-not-available', () => {
+  if (manualCheckInProgress) sendUpdate({ state: 'none', version: APP_VERSION });
+  manualCheckInProgress = false;
 });
 
 autoUpdater.on('error', (err) => {
   log.error('auto-update error', err);
-  if (manualCheckInProgress) {
-    const win = BrowserWindow.getAllWindows()[0];
-    dialog.showMessageBox(win, {
-      type: 'error',
-      title: 'Update check failed',
-      message: 'Couldn’t check for updates.',
-      detail: String(err && err.message || err),
-      buttons: ['OK'],
-    }).catch(() => {});
-    manualCheckInProgress = false;
-  }
+  if (manualCheckInProgress) sendUpdate({ state: 'error', message: String(err && err.message || err) });
+  manualCheckInProgress = false;
+});
+
+// renderer's "restart" button → quit, install, relaunch. The in-progress draft
+// is mirrored to localStorage, so the restart preserves whatever you'd written.
+ipcMain.handle('type:quit-and-install', () => {
+  autoUpdater.quitAndInstall();
 });
 
 function checkForUpdatesManually() {

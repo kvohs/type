@@ -28,11 +28,11 @@ jobs:
           [ -z "$REF" ] && REF="${GITHUB_REF#refs/tags/}"
           echo "tag=$REF" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ steps.ref.outputs.tag }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: 'npm'
@@ -52,7 +52,7 @@ jobs:
         run: ls -lh dist
 
       - name: Attach the .dmg + auto-update manifest to a draft release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.ref.outputs.tag }}
           name: type ${{ steps.ref.outputs.tag }}

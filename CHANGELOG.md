@@ -6,6 +6,13 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.5.2
+
+### Fixed
+- **Choosing a save folder works again with Stay on top on.** With "Stay on top" enabled, clicking **choose…** under "save as .md to" appeared to do nothing — the folder picker was opening *behind* the always-on-top window, hidden from view. The picker now attaches to the window itself, so it always comes up in front no matter what.
+
+---
+
 ## v1.5.1
 
 ### Improved

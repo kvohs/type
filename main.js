@@ -60,11 +60,20 @@ function createWindow() {
 }
 
 // --- file-system bridge for "save to a folder" ---
-ipcMain.handle('type:pick-folder', async () => {
-  const res = await dialog.showOpenDialog({
+ipcMain.handle('type:pick-folder', async (e) => {
+  // Present the picker as a sheet attached to the requesting window. A
+  // parentless dialog renders at normal window level, so when "Stay on top"
+  // is enabled it opens *behind* the always-on-top main window and is never
+  // seen — making it look like the folder can't be changed at all. A sheet is
+  // owned by its parent, so it always surfaces in front, even above-all-others.
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const opts = {
     title: 'Choose where type saves',
     properties: ['openDirectory', 'createDirectory'],
-  });
+  };
+  const res = win
+    ? await dialog.showOpenDialog(win, opts)
+    : await dialog.showOpenDialog(opts);
   if (res.canceled || !res.filePaths.length) return null;
   return res.filePaths[0];
 });

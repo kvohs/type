@@ -10,7 +10,7 @@ ISS=9df5e017-3a86-4d06-ab78-0442c580ce42
 KEYPATH="$HOME/.appstoreconnect/private_keys/AuthKey_43GN5VN77U.p8"
 
 jwt() {
-  KID=$KID ISS=$ISS KEYPATH=$KEYPATH node /tmp/asc-jwt.mjs
+  KID=$KID ISS=$ISS KEYPATH=$KEYPATH node /Users/kellyvohs/Projects/type/ios/scripts/asc-jwt.mjs
 }
 
 echo "waiting for the app record (bundle com.kellyvohs.type) to exist in ASC…"

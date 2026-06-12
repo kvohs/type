@@ -14,7 +14,10 @@ struct TypeWebView: UIViewRepresentable {
         config.mediaTypesRequiringUserActionForPlayback = []
         config.allowsInlineMediaPlayback = true
 
-        let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
+        var version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
+        if let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String, build != "1" {
+            version += " · " + build      // settings footer shows the deploy stamp — the "am I current?" answer
+        }
         #if DEBUG
         let debugFlag = "true"
         #else

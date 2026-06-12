@@ -595,10 +595,23 @@
   body.ios .stage { top: var(--vvt, 0px); height: var(--vvh, 100%); }
   body.ios .hint .k { display: none; }              /* no ⌘ glyphs on glass */
   body.ios .hint .l { font-size: 12.5px; letter-spacing: .26em; }
+  /* keep and burn at opposite edges of the bottom — distance, not chrome.
+     The separator dot goes; it made the two read as one object. Each word
+     carries a fat invisible tap target, and burn wears a quiet ember tint
+     so the destructive one identifies itself. */
   body.ios .hints {
-    bottom: auto; gap: 72px;          /* keep and burn live far apart — no fat-thumb burns */
+    bottom: auto; left: 0; right: 0;
+    padding: 0 13vw;
     top: calc(var(--vvt, 0px) + var(--vvh, 100vh) - 50px - env(safe-area-inset-bottom, 0px) * 0.5);
   }
+  body.ios .hints-group {
+    display: flex; justify-content: space-between; align-items: center;
+    width: 100%;
+  }
+  body.ios .hints-group[hidden] { display: none; }
+  body.ios .hints .sep { display: none; }
+  body.ios .hint { padding: 14px 18px; margin: -14px -18px; }
+  body.ios #hintBurn .l { color: color-mix(in srgb, var(--ember) 60%, var(--ink-faint)); }
   body.ios .settings {
     top: calc(var(--vvt, 0px) + var(--vvh, 100vh) / 2);
     right: 16px;

@@ -1860,6 +1860,25 @@
   /* ================= SAVE (eject + stamp) ================= */
   function save() {
     if (frozen || phase !== 'writing') return;
+    // iPhone, first keep, no folder chosen yet: ask where pages should live,
+    // then keep. Cancelling still keeps — to the iCloud Drive default — and
+    // the question comes back on the next keep until a folder is picked.
+    if (window.typeAPI && window.typeAPI.isIOS && window.typeAPI.pickFolder && !settings.iosFolder) {
+      coolSmolder();                       // the page doesn't smolder under the picker sheet
+      window.typeAPI.pickFolder().then((res) => {
+        if (res && res.name) {
+          settings.iosFolder = res.name;
+          saveSettings();
+          saveFolderLabel.textContent = res.name;
+        }
+        if (!frozen && phase === 'writing') saveNow();
+        else resetSmolder();
+      });
+      return;
+    }
+    saveNow();
+  }
+  function saveNow() {
     frozen = true;
     coolSmolder();
     const prose = [...locked, current].join('\n').replace(/\s+$/,'');

@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import UniformTypeIdentifiers
 
 // The WKWebView host. Loads the bundled web/index.html (the same file the
 // desktop app ships) and exposes a small typeAPI bridge:
@@ -33,6 +34,10 @@ struct TypeWebView: UIViewRepresentable {
           version: '\(version)',
           saveNote: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'saveNote', content: p && p.content || '', filename: p && p.filename || 'type.md' }),
           haptic: (kind) => window.webkit.messageHandlers.type.postMessage({ action: 'haptic', kind: kind || 'key' }),
+          pickFolder: () => new Promise((resolve) => {
+            window.__typePickFolderResolve = resolve;
+            window.webkit.messageHandlers.type.postMessage({ action: 'pickFolder' });
+          }),
           setShellTheme: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'setShellTheme', bg: p && p.bg || '#ffffff', dark: !!(p && p.dark) }),
           sendFeedback: (p) => new Promise((resolve) => {
             window.__typeFeedbackResolve = resolve;
@@ -62,8 +67,47 @@ struct TypeWebView: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate, UIDocumentPickerDelegate {
         weak var webView: WKWebView?
+
+        // --- save-folder picker ---
+        // The system folder picker grants a security-scoped URL to any folder
+        // Files can reach (any iCloud Drive folder, On My iPhone, providers).
+        // A bookmark in UserDefaults keeps that access across launches.
+        func presentFolderPicker() {
+            guard let root = webView?.window?.rootViewController else { resolvePick(nil); return }
+            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
+            picker.delegate = self
+            root.present(picker, animated: true)
+        }
+
+        private func resolvePick(_ name: String?) {
+            let arg: String
+            if let name {
+                let safe = name.replacingOccurrences(of: "\\", with: "").replacingOccurrences(of: "'", with: "\u{2019}")
+                arg = "{ name: '\(safe)' }"
+            } else {
+                arg = "null"
+            }
+            webView?.evaluateJavaScript("window.__typePickFolderResolve && window.__typePickFolderResolve(\(arg)); window.__typePickFolderResolve = null;")
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let url = urls.first else { resolvePick(nil); return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            if let bookmark = try? url.bookmarkData() {
+                UserDefaults.standard.set(bookmark, forKey: "saveFolderBookmark")
+                UserDefaults.standard.set(url.lastPathComponent, forKey: "saveFolderName")
+                resolvePick(url.lastPathComponent)
+            } else {
+                resolvePick(nil)
+            }
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            resolvePick(nil)
+        }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.name == "type", let body = message.body as? [String: Any],
@@ -81,6 +125,8 @@ struct TypeWebView: UIViewRepresentable {
                 sendFeedback(text)
             case "haptic":
                 Haptics.play(body["kind"] as? String ?? "key")
+            case "pickFolder":
+                presentFolderPicker()
             case "setShellTheme":
                 let bg = body["bg"] as? String ?? "#ffffff"
                 let dark = body["dark"] as? Bool ?? false

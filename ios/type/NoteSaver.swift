@@ -30,6 +30,32 @@ enum NoteSaver {
     static func save(content: String, filename: String, completion: ((String) -> Void)? = nil) {
         DispatchQueue.global(qos: .utility).async {
             let fm = FileManager.default
+            let safe = filename.replacingOccurrences(of: "/", with: "-")
+
+            // 1) a folder the user picked (any place Files can reach) wins
+            if let bookmark = UserDefaults.standard.data(forKey: "saveFolderBookmark") {
+                var stale = false
+                if let dir = try? URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &stale),
+                   dir.startAccessingSecurityScopedResource() {
+                    defer { dir.stopAccessingSecurityScopedResource() }
+                    if stale, let fresh = try? dir.bookmarkData() {
+                        UserDefaults.standard.set(fresh, forKey: "saveFolderBookmark")
+                    }
+                    do {
+                        try content.data(using: .utf8)?.write(to: dir.appendingPathComponent(safe), options: .atomic)
+                        let name = UserDefaults.standard.string(forKey: "saveFolderName") ?? "your folder"
+                        #if DEBUG
+                        DiagLog.append("saved (picked folder): \(dir.path)/\(safe)")
+                        #endif
+                        DispatchQueue.main.async { completion?("folder:" + name) }
+                        return
+                    } catch {
+                        NSLog("type saveNote: picked folder failed (%@), falling back", error.localizedDescription)
+                    }
+                }
+            }
+
+            // 2) iCloud Drive → type; 3) local Documents when iCloud is off
             let dir: URL
             let dest: String
             if let ubiquity = fm.url(forUbiquityContainerIdentifier: nil) {
@@ -41,7 +67,6 @@ enum NoteSaver {
             }
             do {
                 try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-                let safe = filename.replacingOccurrences(of: "/", with: "-")
                 let url = dir.appendingPathComponent(safe)
                 try content.data(using: .utf8)?.write(to: url, options: .atomic)
                 #if DEBUG

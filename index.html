@@ -2915,22 +2915,31 @@
 
     // the shell reports where a kept page landed; the stamp passes it on
     window.__typeSaved = (dest) => {
-      window.__typeSaveDest = dest === 'icloud' ? 'in iCloud Drive' : 'on this iPhone';
+      if (dest && dest.indexOf('folder:') === 0) window.__typeSaveDest = 'in ' + dest.slice(7);
+      else window.__typeSaveDest = dest === 'icloud' ? 'in iCloud Drive' : 'on this iPhone';
     };
 
     // settings, tuned for the phone: no Zen (the app is already the whole
-    // screen), no wallpaper share yet, and saves are a fact, not a chooser
+    // screen), no wallpaper share yet. The save row is a real chooser —
+    // any folder Files can reach, including the one the desktop writes to.
     const zenRow = boxes.zen.closest('.setrow'); if (zenRow) zenRow.hidden = true;
     document.getElementById('rowHaptics').hidden = false;   // the phone has a body — let it be tuned
     quoteShare.remove();
     document.getElementById('saveDiv').hidden = false;
     document.getElementById('saveTitle').hidden = false;
     rowSaveFolder.hidden = false;
-    saveFolderLabel.textContent = 'iCloud Drive · type';
-    rowSaveFolder.style.cursor = 'default';
-    const pickLabel = rowSaveFolder.querySelector('.setpick'); if (pickLabel) pickLabel.hidden = true;
+    saveFolderLabel.textContent = settings.iosFolder || 'iCloud Drive · type';
+    rowSaveFolder.addEventListener('click', async () => {
+      if (!window.typeAPI.pickFolder) return;
+      const res = await window.typeAPI.pickFolder();
+      if (res && res.name) {
+        settings.iosFolder = res.name;
+        saveSettings();
+        saveFolderLabel.textContent = res.name;
+      }
+    });
     const saveTip = document.getElementById('saveTitle').querySelector('.tip');
-    if (saveTip) saveTip.textContent = 'Kept pages land in iCloud Drive → type as plain markdown — in the Files app, synced everywhere iCloud goes. No account, just your iCloud.';
+    if (saveTip) saveTip.textContent = 'Pages land in iCloud Drive → type by default. Choose any folder the Files app can reach instead — your Obsidian vault, the folder your Mac saves to, anywhere. Plain markdown either way.';
   })();
 
   computeCols();

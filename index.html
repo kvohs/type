@@ -464,6 +464,7 @@
     padding: 8px 0; font-size: 12.5px; color: var(--ink-soft);
     cursor: pointer; user-select: none;
   }
+  .setrow[hidden] { display: none; }  /* WebKit: the flex display above would beat the hidden attribute */
   .setrow input { position: absolute; opacity: 0; pointer-events: none; }
   .setrow .sw {
     position: relative; width: 34px; height: 18px; border-radius: 999px;
@@ -611,6 +612,14 @@
   body.ios .hints-group[hidden] { display: none; }
   body.ios .hints .sep { display: none; }
   body.ios .hints .hint { padding: 14px 18px; margin: -14px -18px; }   /* fat targets — bottom bar only, not the gear */
+  /* the wordmark sits between keep and burn as the "tap to type" landmark.
+     pointer-events none is the whole trick: the tap passes through it onto
+     the full-surface field below, so iOS raises the keyboard natively. */
+  body.ios .type-mark-hint {
+    pointer-events: none; gap: 0;     /* the .hint gap would split "type" from its period */
+    font-weight: 700; font-size: 15px; letter-spacing: .03em;
+    text-transform: none; color: var(--ink-quiet);
+  }
   body.ios #hintBurn .l { color: color-mix(in srgb, var(--ember) 60%, var(--ink-faint)); }
   body.ios .settings {
     top: calc(var(--vvt, 0px) + var(--vvh, 100vh) / 2);
@@ -708,6 +717,7 @@
       <label class="setrow setrow-sub"><span>Carriage return</span><input type="checkbox" id="setCarriage" /><span class="sw"></span></label>
       <label class="setrow setrow-sub"><span>Margin bell</span><input type="checkbox" id="setBell" /><span class="sw"></span></label>
     </div>
+    <label class="setrow" id="rowHaptics" hidden><span>Haptics</span><input type="checkbox" id="setHaptics" /><span class="sw"></span></label>
     <div class="setdiv"></div>
     <div class="settings-title">quotes</div>
     <label class="setrow"><span>On startup</span><input type="checkbox" id="setQuoteOpen" /><span class="sw"></span></label>
@@ -816,7 +826,7 @@
   })();
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, haptics: true, quoteOpen: true, quoteBurn: true, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -824,7 +834,7 @@
   const applyTheme = () => {
     THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), editable: document.getElementById('setEditable'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), editable: document.getElementById('setEditable'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), haptics: document.getElementById('setHaptics'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
@@ -2669,6 +2679,13 @@
       const hn = document.getElementById('hintsNormal');
       const seps = hn.querySelectorAll('.sep');
       if (seps.length) seps[seps.length - 1].remove();
+      // the wordmark sits center-bottom as the tap-to-type landmark; taps
+      // pass straight through it onto the keyboard field underneath
+      const mark = document.createElement('span');
+      mark.className = 'hint type-mark-hint';
+      mark.setAttribute('aria-hidden', 'true');
+      mark.innerHTML = 'type<span class="period">.</span>';
+      hn.insertBefore(mark, document.getElementById('hintBurn'));
       hintSettings.classList.add('ios-settings');
       hintSettings.innerHTML = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-label="settings"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
       document.body.appendChild(hintSettings);
@@ -2736,7 +2753,7 @@
       return true;
     };
     let quiet = false;                 // true while reconciling a correction — no haptic machine-gun
-    const haptic = (kind) => { if (!quiet && window.typeAPI.haptic) window.typeAPI.haptic(kind); };
+    const haptic = (kind) => { if (!quiet && settings.haptics && window.typeAPI.haptic) window.typeAPI.haptic(kind); };
     const touchChar = (c) => {
       if (skipOrPlayIntro()) { dbg('drop (intro) ' + JSON.stringify(c)); return; }
       if (frozen) { dbg('drop (frozen) ' + JSON.stringify(c)); return; }
@@ -2892,6 +2909,7 @@
     // settings, tuned for the phone: no Zen (the app is already the whole
     // screen), no wallpaper share yet, and saves are a fact, not a chooser
     const zenRow = boxes.zen.closest('.setrow'); if (zenRow) zenRow.hidden = true;
+    document.getElementById('rowHaptics').hidden = false;   // the phone has a body — let it be tuned
     quoteShare.remove();
     document.getElementById('saveDiv').hidden = false;
     document.getElementById('saveTitle').hidden = false;

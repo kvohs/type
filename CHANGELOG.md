@@ -6,6 +6,14 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.7.0
+
+### New
+- **Paste works.** ⌘V types the clipboard onto the page. On the writing line it flows through the same wrap as typing, so a long passage lands exactly as if you'd typed it — including line breaks. With the cursor up on an earlier line (editable page on), it pastes right at the cursor; the line still stops at the margin. On a locked page, the past stays locked — paste up there takes no ink, just like typing. Pasted text keeps its spacing as written: the double-space-makes-a-period trick only applies to your own keystrokes.
+- **Real text-navigation shortcuts when you arrow up.** Once the cursor is on an earlier line — editable page on or off — the macOS habits work: ⌥← / ⌥→ jump by word, ⌘← / ⌘→ (or Home / End) go to the ends of the line, ⌘↑ jumps to the first line, and ⌘↓ drops you straight back to the writing line.
+
+---
+
 ## v1.6.0
 
 ### New

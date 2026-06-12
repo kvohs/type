@@ -2722,9 +2722,11 @@
       if (!introPlayed) playIntro(); else skipIntro();
       return true;
     };
+    const haptic = (kind) => { if (window.typeAPI.haptic) window.typeAPI.haptic(kind); };
     const touchChar = (c) => {
       if (skipOrPlayIntro()) { dbg('drop (intro) ' + JSON.stringify(c)); return; }
       if (frozen) { dbg('drop (frozen) ' + JSON.stringify(c)); return; }
+      haptic('key');
       if (cursor) {
         if (settings.editable) editInsert(c);
         else if (c === 'x' || c === 'X') overstrikeAt(cursor.line, cursor.col);
@@ -2736,12 +2738,14 @@
     };
     const touchEnter = () => {
       if (skipOrPlayIntro() || frozen) return;
+      haptic('return');
       if (cursor) { exitOverstrike(); return; }
       if (quotePlaying && quoteSkip) quoteSkip();
       commitLine(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
     };
     const touchBackspace = (word) => {
       if (skipOrPlayIntro() || frozen) return;
+      haptic('key');
       if (cursor) { if (settings.editable) editDelete(); else overstrikeScrub(); return; }
       if (quotePlaying && quoteSkip) quoteSkip();
       if (current.length > 0) {
@@ -2791,6 +2795,51 @@
         });
       });
     }
+
+    // Phones interrupt — a notification or app switch is not "stopping".
+    // The smolder clock only runs while type is actually in front of you,
+    // and "Burn if I stop" starts OFF on the phone's first run: opt in,
+    // don't ambush. (Settings carried over from before keep their choice.)
+    if (localStorage.getItem('type.settings') === null) {
+      settings.smolder = false;
+      boxes.smolder.checked = false;
+      updateBurnAfter();
+      saveSettings();
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) coolSmolder(); else scheduleSmolder();
+    });
+
+    // swipe down on the paper tucks the keyboard away to sit back and read;
+    // any tap brings it right back
+    let swipeStart = null;
+    mobileInput.addEventListener('touchstart', (e) => {
+      swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+    mobileInput.addEventListener('touchmove', (e) => {
+      if (!swipeStart) return;
+      const dy = e.touches[0].clientY - swipeStart.y;
+      const dx = Math.abs(e.touches[0].clientX - swipeStart.x);
+      if (dy > 70 && dx < 50) { swipeStart = null; mobileInput.blur(); }
+    }, { passive: true });
+
+    // keep and burn land with weight you can feel
+    document.getElementById('hintKeep').addEventListener('click', () => {
+      if (!frozen && phase === 'writing' && !feedbackMode) haptic('keep');
+    });
+    document.getElementById('hintBurn').addEventListener('click', () => {
+      if (!frozen && phase === 'writing' && !feedbackMode) haptic('burn');
+    });
+
+    // tell the shell the paper color, so the status bar and the next
+    // launch's backdrop match the theme instead of flashing white
+    const syncShellTheme = () => {
+      if (!window.typeAPI.setShellTheme) return;
+      const bg = getComputedStyle(document.body).getPropertyValue('--paper').trim();
+      window.typeAPI.setShellTheme({ bg, dark: !!(settings.dark || settings.amber) });
+    };
+    themePick.addEventListener('click', () => setTimeout(syncShellTheme, 0));
+    syncShellTheme();
 
     // settings, tuned for the phone: no Zen (the app is already the whole
     // screen), no wallpaper share yet, and saves are a fact, not a chooser

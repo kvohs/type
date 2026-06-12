@@ -29,6 +29,8 @@ struct TypeWebView: UIViewRepresentable {
           log: (m) => window.webkit.messageHandlers.type.postMessage({ action: 'log', message: String(m) }),
           version: '\(version)',
           saveNote: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'saveNote', content: p && p.content || '', filename: p && p.filename || 'type.md' }),
+          haptic: (kind) => window.webkit.messageHandlers.type.postMessage({ action: 'haptic', kind: kind || 'key' }),
+          setShellTheme: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'setShellTheme', bg: p && p.bg || '#ffffff', dark: !!(p && p.dark) }),
           sendFeedback: (p) => new Promise((resolve) => {
             window.__typeFeedbackResolve = resolve;
             window.webkit.messageHandlers.type.postMessage({ action: 'sendFeedback', body: p && p.body || '' });
@@ -71,6 +73,15 @@ struct TypeWebView: UIViewRepresentable {
             case "sendFeedback":
                 let text = body["body"] as? String ?? ""
                 sendFeedback(text)
+            case "haptic":
+                Haptics.play(body["kind"] as? String ?? "key")
+            case "setShellTheme":
+                let bg = body["bg"] as? String ?? "#ffffff"
+                let dark = body["dark"] as? Bool ?? false
+                DispatchQueue.main.async {
+                    ThemeStore.shared.apply(bgHex: bg, dark: dark)
+                    self.webView?.backgroundColor = UIColor(typeHex: bg)
+                }
             case "log":
                 #if DEBUG
                 // web-side diagnostics: visible in the console AND pullable

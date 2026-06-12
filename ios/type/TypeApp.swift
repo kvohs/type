@@ -13,9 +13,12 @@ struct TypeApp: App {
 }
 
 struct ContentView: View {
+    @ObservedObject private var theme = ThemeStore.shared
+
     var body: some View {
         TypeWebView()
             .ignoresSafeArea()
-            .background(Color(red: 1, green: 1, blue: 1)) // paper, until the page paints its theme
+            .background(theme.bg)                              // last session's paper color
+            .preferredColorScheme(theme.dark ? .dark : .light) // status bar legible on dark paper
     }
 }

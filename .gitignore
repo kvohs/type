@@ -6,3 +6,4 @@ ios/type/web/index.html
 ios/type/web/quotes.js
 ios/build/
 ios/DerivedData/
+__pycache__/

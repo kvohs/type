@@ -586,6 +586,35 @@
     border-left-color: color-mix(in srgb, var(--panel) 78%, transparent);
   }
   .float-tip.show { opacity: 1; transform: translateY(-50%) translateX(0); }
+
+  /* ---------- iOS (touch) ---------- */
+  /* the iPhone app adds body.ios and keeps --vvh / --vvt synced to the
+     visual viewport, so the strike point centers in the area the keyboard
+     leaves visible — the page never hides under the keys */
+  body.ios { overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
+  body.ios .stage { top: var(--vvt, 0px); height: var(--vvh, 100%); }
+  body.ios .hint .k { display: none; }              /* no ⌘ glyphs on glass */
+  body.ios .hint .l { font-size: 12.5px; letter-spacing: .26em; }
+  body.ios .hints {
+    bottom: auto; gap: 32px;
+    top: calc(var(--vvt, 0px) + var(--vvh, 100vh) - 50px - env(safe-area-inset-bottom, 0px) * 0.5);
+  }
+  body.ios .settings {
+    top: calc(var(--vvt, 0px) + var(--vvh, 100vh) / 2);
+    right: 16px;
+    max-height: calc(var(--vvh, 100vh) - 24px);
+  }
+  body.ios .feedback-label, body.ios .feedback-paused { top: calc(14px + env(safe-area-inset-top, 0px)); }
+  body.ios .smolder-warn { top: calc(36px + env(safe-area-inset-top, 0px)); }
+  body.ios .update { top: calc(12px + env(safe-area-inset-top, 0px)); }
+  #mobileInput {
+    position: fixed; left: 50%;
+    top: calc(var(--vvt, 0px) + var(--vvh, 100vh) * 0.5);
+    width: 2px; height: 2px; border: 0; padding: 0; margin: 0;
+    opacity: 0; background: transparent; color: transparent;
+    caret-color: transparent; outline: none;
+    font-size: 16px;                                /* ≥16px stops the focus zoom */
+  }
 </style>
 </head>
 <body>
@@ -606,16 +635,16 @@
 
   <div class="hints dim" id="hints">
     <span class="hints-group" id="hintsNormal">
-      <span class="hint"><span class="k">&#8984;S</span><span class="l">keep</span></span>
+      <span class="hint hint-btn" id="hintKeep"><span class="k">&#8984;S</span><span class="l">keep</span></span>
       <span class="sep"></span>
-      <span class="hint"><span class="k">&#8984;B</span><span class="l">burn</span></span>
+      <span class="hint hint-btn" id="hintBurn"><span class="k">&#8984;B</span><span class="l">burn</span></span>
       <span class="sep"></span>
       <span class="hint hint-btn" id="hintSettings"><span class="k">&#8984;,</span><span class="l">settings</span></span>
     </span>
     <span class="hints-group" id="hintsFeedback" hidden>
-      <span class="hint"><span class="k">&#8984;S</span><span class="l">send</span></span>
+      <span class="hint hint-btn" id="hintSend"><span class="k">&#8984;S</span><span class="l">send</span></span>
       <span class="sep"></span>
-      <span class="hint"><span class="k">esc</span><span class="l">cancel</span></span>
+      <span class="hint hint-btn" id="hintCancel"><span class="k">esc</span><span class="l">cancel</span></span>
     </span>
   </div>
 
@@ -817,10 +846,9 @@
   settingsEl.querySelectorAll('.info').forEach(infoEl => {
     const src = infoEl.querySelector('.tip');
     if (!src || !floatTip) return;
-    const text = src.textContent;
     const show = () => {
       const r = infoEl.getBoundingClientRect();
-      floatTip.textContent = text;
+      floatTip.textContent = src.textContent;     // read live — iOS rewrites the save tip
       floatTip.style.top = (r.top + r.height / 2) + 'px';
       floatTip.classList.add('show');
     };
@@ -1147,6 +1175,15 @@
     locked[i] = t.slice(0, cursor.col) + c + t.slice(cursor.col);
     cursor.col++;
     editRefresh(i);
+  }
+  // locked-page ⌫ while the cursor sits up the sheet: scrub left without deleting
+  function overstrikeScrub() {
+    const prev = cursor.line;
+    if (cursor.col > markerLen(cursor.line)) cursor.col--;
+    else if (cursor.line > 0) { cursor.line--; cursor.col = locked[cursor.line].length; }
+    if (prev !== cursor.line) renderLockedLine(prev);
+    renderLockedLine(cursor.line); layout();
+    thock(); markTyping();
   }
   function editDelete() {
     const i = cursor.line;
@@ -1790,8 +1827,9 @@
     const fileStamp = now.toISOString().slice(0,16).replace(/[:T]/g,'-');
     const filename = `type-${fileStamp}.md`;
 
-    if (window.typeAPI && window.typeAPI.isDesktop) {
-      // desktop: write a .md file to the chosen folder (or Downloads)
+    if (window.typeAPI && window.typeAPI.saveNote) {
+      // desktop: write a .md file to the chosen folder (or Downloads).
+      // iOS: the bridge writes it into iCloud Drive → type.
       window.typeAPI.saveNote({ dir: settings.saveDir || null, content: body, filename });
     } else {
       // browser: download a .md file
@@ -2420,6 +2458,11 @@
 
   window.addEventListener('keydown', (e) => {
     const mod = e.metaKey || e.ctrlKey;
+    // iOS: printable keys and ⌫ arrive through beforeinput on the hidden
+    // field — skip them here so they don't land twice. Enter and arrows only
+    // come through keydown, so those stay.
+    if (mobileInput && e.target === mobileInput && !mod &&
+        (e.key.length === 1 || e.key === 'Backspace')) return;
     unlockAudio();
     if (!mod && e.key.length === 1) hideCursor();      // any printable keystroke tucks the pointer away
 
@@ -2504,12 +2547,7 @@
       }
       if (e.key === 'Backspace') {
         e.preventDefault();
-        const prev = cursor.line;
-        if (cursor.col > markerLen(cursor.line)) cursor.col--;
-        else if (cursor.line > 0) { cursor.line--; cursor.col = locked[cursor.line].length; }
-        if (prev !== cursor.line) renderLockedLine(prev);
-        renderLockedLine(cursor.line); layout();
-        thock(); markTyping();
+        overstrikeScrub();
         return;
       }
       if (e.key === 'x' || e.key === 'X') { e.preventDefault(); overstrikeAt(cursor.line, cursor.col); return; }
@@ -2552,6 +2590,153 @@
     if (phase === 'intro') { if (!introPlayed) playIntro(); else skipIntro(); }
   });
   window.addEventListener('resize', () => { computeCols(); reflowLocked(); layout(); });
+
+  /* ================= TOUCH / HINT BUTTONS ================= */
+  // the hint words are real buttons everywhere — tap or click keep, burn,
+  // send, cancel instead of (or as well as) the shortcuts
+  document.getElementById('hintKeep').addEventListener('click', () => { if (!feedbackMode) save(); });
+  document.getElementById('hintBurn').addEventListener('click', () => { if (!feedbackMode) burn(); });
+  document.getElementById('hintSend').addEventListener('click', () => sendFeedback());
+  document.getElementById('hintCancel').addEventListener('click', () => exitFeedbackMode(false));
+
+  // editable page: click or tap a committed line to put the cursor right there
+  feed.addEventListener('click', (e) => {
+    if (!settings.editable || frozen || phase !== 'writing' || quotePlaying) return;
+    const lineEl = e.target.closest ? e.target.closest('.line') : null;
+    if (!lineEl || lineEl.parentElement !== feed) return;
+    const idx = Array.prototype.indexOf.call(feed.children, lineEl);
+    if (idx < 0) return;
+    if (idx >= locked.length) { if (cursor) exitOverstrike(); return; }   // the writing line
+    let col = locked[idx].length;
+    const chs = lineEl.querySelectorAll('.ch');
+    for (let k = 0; k < chs.length; k++) {
+      const r = chs[k].getBoundingClientRect();
+      if (r.width && e.clientX < r.left + r.width / 2) { col = k; break; }
+    }
+    const prev = cursor ? cursor.line : null;
+    cursor = { line: idx, col: Math.max(markerLen(idx), Math.min(col, locked[idx].length)) };
+    stage.classList.add('overstriking');
+    if (prev !== null && prev !== idx) renderLockedLine(prev);
+    renderLockedLine(idx); layout();
+  });
+
+  /* ================= iOS (the iPhone app) ================= */
+  // The native shell injects typeAPI with isIOS — that flips on the touch
+  // layer: a hidden field summons the keyboard and routes everything typed
+  // into the same paths the desktop keydown handler uses, and the visual
+  // viewport drives the strike point so the page sits above the keys.
+  const isIOS = !!(window.typeAPI && window.typeAPI.isIOS);
+  let mobileInput = null;
+  if (isIOS) (function setupIOS() {
+    document.body.classList.add('ios');
+    const mv = document.querySelector('meta[name="viewport"]');
+    if (mv) mv.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+    window.addEventListener('gesturestart', (e) => e.preventDefault());   // no pinch zoom
+
+    const syncViewport = () => {
+      const vv = window.visualViewport;
+      document.documentElement.style.setProperty('--vvh', (vv ? vv.height : window.innerHeight) + 'px');
+      document.documentElement.style.setProperty('--vvt', (vv ? vv.offsetTop : 0) + 'px');
+      computeCols(); reflowLocked(); layout();
+    };
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncViewport);
+      window.visualViewport.addEventListener('scroll', syncViewport);
+    }
+    syncViewport();
+
+    // hidden, never-empty field: the sentinel means ⌫ always produces a
+    // beforeinput even with "nothing" to delete in the field itself
+    const SENTINEL = 'xx';
+    mobileInput = document.createElement('input');
+    mobileInput.id = 'mobileInput';
+    mobileInput.type = 'text';
+    mobileInput.setAttribute('autocomplete', 'off');
+    mobileInput.setAttribute('autocorrect', 'off');
+    mobileInput.setAttribute('autocapitalize', 'off');
+    mobileInput.setAttribute('spellcheck', 'false');
+    mobileInput.setAttribute('enterkeyhint', 'enter');
+    document.body.appendChild(mobileInput);
+    const resetSentinel = () => {
+      if (mobileInput.value !== SENTINEL) mobileInput.value = SENTINEL;
+      try { mobileInput.setSelectionRange(SENTINEL.length, SENTINEL.length); } catch (err) {}
+    };
+    resetSentinel();
+
+    // tap the paper, get the keyboard — but not when tapping controls
+    const summon = () => { try { mobileInput.focus({ preventScroll: true }); } catch (err) { mobileInput.focus(); } };
+    const updateEl = document.getElementById('update');
+    document.addEventListener('touchend', (e) => {
+      const t = e.target;
+      if (settingsEl.contains(t) || hints.contains(t) || quoteX.contains(t) ||
+          (updateEl && updateEl.contains(t))) return;
+      summon();
+    }, { passive: true });
+
+    const skipOrPlayIntro = () => {
+      if (phase !== 'intro') return false;
+      if (!introPlayed) playIntro(); else skipIntro();
+      return true;
+    };
+    const touchChar = (c) => {
+      if (skipOrPlayIntro() || frozen) return;
+      if (cursor) {
+        if (settings.editable) editInsert(c);
+        else if (c === 'x' || c === 'X') overstrikeAt(cursor.line, cursor.col);
+        return;
+      }
+      if (quotePlaying && quoteSkip) quoteSkip();
+      pushChar(c); thock(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
+    };
+    const touchEnter = () => {
+      if (skipOrPlayIntro() || frozen) return;
+      if (cursor) { exitOverstrike(); return; }
+      if (quotePlaying && quoteSkip) quoteSkip();
+      commitLine(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
+    };
+    const touchBackspace = (word) => {
+      if (skipOrPlayIntro() || frozen) return;
+      if (cursor) { if (settings.editable) editDelete(); else overstrikeScrub(); return; }
+      if (quotePlaying && quoteSkip) quoteSkip();
+      if (current.length > 0) {
+        current = word ? current.replace(/\S+\s*$/, '') : current.slice(0, -1);
+        renderActive(); thock();
+      }
+      markTyping(); nudgeHints(); resetSmolder(); persistDraft(); updateMeter();
+    };
+
+    mobileInput.addEventListener('beforeinput', (e) => {
+      const t = e.inputType;
+      if (t === 'insertFromPaste') { e.preventDefault(); return; }       // the window paste handler owns it
+      if (t === 'insertReplacementText') { e.preventDefault(); return; } // OS corrections don't rewrite the page
+      e.preventDefault();
+      unlockAudio();
+      if (t === 'insertText' || t === 'insertCompositionText') {
+        for (const c of (e.data || '')) { if (c === '\n') touchEnter(); else touchChar(c); }
+      } else if (t === 'insertLineBreak' || t === 'insertParagraph') {
+        touchEnter();
+      } else if (t === 'deleteContentBackward') {
+        touchBackspace(false);
+      } else if (t === 'deleteWordBackward') {
+        touchBackspace(true);
+      }
+      resetSentinel();
+    });
+    mobileInput.addEventListener('input', resetSentinel);
+
+    // settings, tuned for the phone: no Zen (the app is already the whole
+    // screen), no wallpaper share yet, and saves are a fact, not a chooser
+    const zenRow = boxes.zen.closest('.setrow'); if (zenRow) zenRow.hidden = true;
+    quoteShare.remove();
+    document.getElementById('saveDiv').hidden = false;
+    document.getElementById('saveTitle').hidden = false;
+    rowSaveFolder.hidden = false;
+    saveFolderLabel.textContent = 'iCloud Drive · type';
+    rowSaveFolder.style.cursor = 'default';
+    const pickLabel = rowSaveFolder.querySelector('.setpick'); if (pickLabel) pickLabel.hidden = true;
+    const saveTip = document.getElementById('saveTitle').querySelector('.tip');
+    if (saveTip) saveTip.textContent = 'Kept pages land in iCloud Drive → type as plain markdown — in the Files app, synced everywhere iCloud goes. No account, just your iCloud.';
+  })();
 
   computeCols();
   const recovered = readDraft();

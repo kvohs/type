@@ -1,0 +1,42 @@
+name: type
+options:
+  bundleIdPrefix: com.kellyvohs
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: CAKM5U4VR2
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: 1.7.0
+    CURRENT_PROJECT_VERSION: 1
+targets:
+  type:
+    type: application
+    platform: iOS
+    sources:
+      - path: type
+        excludes:
+          - "web/index.html"
+          - "web/quotes.js"
+      # web/ is a folder reference (blue): contents resolve at build time, so
+      # the pre-build copy below always ships the current root index.html
+      - path: type/web
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kellyvohs.type
+        INFOPLIST_FILE: type/Info.plist
+        CODE_SIGN_ENTITLEMENTS: type/type.entitlements
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    preBuildScripts:
+      - name: Sync web sources
+        script: |
+          # the iOS app ships the same single-file app the desktop wraps —
+          # copied fresh from the repo root on every build, never edited here
+          cp "$SRCROOT/../index.html" "$SRCROOT/type/web/index.html"
+          cp "$SRCROOT/../quotes.js"  "$SRCROOT/type/web/quotes.js"
+        basedOnDependencyAnalysis: false

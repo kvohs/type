@@ -596,7 +596,7 @@
   body.ios .hint .k { display: none; }              /* no ⌘ glyphs on glass */
   body.ios .hint .l { font-size: 12.5px; letter-spacing: .26em; }
   body.ios .hints {
-    bottom: auto; gap: 32px;
+    bottom: auto; gap: 72px;          /* keep and burn live far apart — no fat-thumb burns */
     top: calc(var(--vvt, 0px) + var(--vvh, 100vh) - 50px - env(safe-area-inset-bottom, 0px) * 0.5);
   }
   body.ios .settings {
@@ -604,15 +604,34 @@
     right: 16px;
     max-height: calc(var(--vvh, 100vh) - 24px);
   }
+  /* settings lives at the top corner on the phone — a quiet gear glyph,
+     keep & burn alone at the bottom. 40px box = a real thumb target. */
+  body.ios .hint.ios-settings {
+    position: fixed; z-index: 11;
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    right: 12px;
+    width: 40px; height: 40px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ink-faint);
+    -webkit-tap-highlight-color: transparent;
+  }
+  body.ios .hint.ios-settings:active { color: var(--ink-quiet); }
   body.ios .feedback-label, body.ios .feedback-paused { top: calc(14px + env(safe-area-inset-top, 0px)); }
   body.ios .smolder-warn { top: calc(36px + env(safe-area-inset-top, 0px)); }
   body.ios .update { top: calc(12px + env(safe-area-inset-top, 0px)); }
+  /* The keyboard's field IS the paper: an invisible input covering the whole
+     writing surface, so a finger lands on a real focusable element and iOS
+     presents the keyboard natively — programmatic focus() sets focus but
+     refuses to raise the keys. Controls layer above it (hints z10, update
+     z11, settings z12, quote-x z9); taps forward through to the page. */
   #mobileInput {
-    position: fixed; left: 50%;
-    top: calc(var(--vvt, 0px) + var(--vvh, 100vh) * 0.5);
-    width: 2px; height: 2px; border: 0; padding: 0; margin: 0;
-    opacity: 0; background: transparent; color: transparent;
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    border: 0; padding: 0; margin: 0; border-radius: 0;
+    opacity: 0.01; background: transparent; color: transparent;
     caret-color: transparent; outline: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none;
+    z-index: 5;
     font-size: 16px;                                /* ≥16px stops the focus zoom */
   }
 </style>
@@ -2628,7 +2647,19 @@
   const isIOS = !!(window.typeAPI && window.typeAPI.isIOS);
   let mobileInput = null;
   if (isIOS) (function setupIOS() {
+    const dbg = (m) => { if (window.typeAPI.debug && window.typeAPI.log) window.typeAPI.log(m); };
+    dbg('=== launch v' + (window.typeAPI.version || '?') + ' at ' + new Date().toISOString());
     document.body.classList.add('ios');
+    // settings rides the top corner on glass as a quiet gear; keep & burn
+    // stay alone at the bottom
+    (function liftSettingsHint() {
+      const hn = document.getElementById('hintsNormal');
+      const seps = hn.querySelectorAll('.sep');
+      if (seps.length) seps[seps.length - 1].remove();
+      hintSettings.classList.add('ios-settings');
+      hintSettings.innerHTML = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-label="settings"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+      document.body.appendChild(hintSettings);
+    })();
     const mv = document.querySelector('meta[name="viewport"]');
     if (mv) mv.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
     window.addEventListener('gesturestart', (e) => e.preventDefault());   // no pinch zoom
@@ -2663,26 +2694,20 @@
     };
     resetSentinel();
 
-    // tap the paper, get the keyboard — but not when tapping controls
-    const summon = () => { try { mobileInput.focus({ preventScroll: true }); } catch (err) { mobileInput.focus(); } };
-    const updateEl = document.getElementById('update');
-    const onControls = (t) => settingsEl.contains(t) || hints.contains(t) ||
-      (updateEl && updateEl.contains(t));
-    document.addEventListener('touchend', (e) => {
-      if (onControls(e.target) || quoteX.contains(e.target)) return;
-      summon();
-    }, { passive: true });
-    // iOS follows each tap with a synthetic mousedown that lands on the
-    // unfocusable paper and silently steals focus — keyboard up, typing
-    // dead. Pin it: any blur not caused by touching a control refocuses
-    // immediately (still inside the tap's gesture window, so iOS allows it).
-    let controlTouch = false;
-    document.addEventListener('touchstart', (e) => {
-      controlTouch = onControls(e.target);
-    }, { passive: true, capture: true });
-    mobileInput.addEventListener('blur', () => {
-      if (controlTouch) return;
-      setTimeout(() => { if (!controlTouch) summon(); }, 0);
+    // the input covers the page, so a tap on the paper is a real tap on a
+    // text field — iOS focuses it and presents the keyboard natively. Taps
+    // pass through to whatever sits underneath (lines for cursor placement,
+    // the intro skip, the quote ×) by re-dispatching the click below the
+    // input. Controls (hints, settings, update) layer above it and never
+    // reach this handler.
+    mobileInput.addEventListener('click', (e) => {
+      mobileInput.style.pointerEvents = 'none';
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      mobileInput.style.pointerEvents = '';
+      if (under && under !== mobileInput) {
+        under.dispatchEvent(new MouseEvent('click', { clientX: e.clientX, clientY: e.clientY, bubbles: true }));
+      }
+      dbg('tap: focused=' + (document.activeElement === mobileInput));
     });
 
     const skipOrPlayIntro = () => {
@@ -2691,7 +2716,8 @@
       return true;
     };
     const touchChar = (c) => {
-      if (skipOrPlayIntro() || frozen) return;
+      if (skipOrPlayIntro()) { dbg('drop (intro) ' + JSON.stringify(c)); return; }
+      if (frozen) { dbg('drop (frozen) ' + JSON.stringify(c)); return; }
       if (cursor) {
         if (settings.editable) editInsert(c);
         else if (c === 'x' || c === 'X') overstrikeAt(cursor.line, cursor.col);
@@ -2699,6 +2725,7 @@
       }
       if (quotePlaying && quoteSkip) quoteSkip();
       pushChar(c); thock(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
+      dbg('typed ' + JSON.stringify(c) + ' current=' + JSON.stringify(current));
     };
     const touchEnter = () => {
       if (skipOrPlayIntro() || frozen) return;

@@ -127,6 +127,10 @@ struct TypeWebView: UIViewRepresentable {
                   for (const c of 'ok hi') sendChar(c);
                   sendBackspace();
                   sendChar('!');
+                  for (const c of ' tou') sendChar(c);
+                  // simulate iOS autocorrect: rewrite the word IN PLACE (mid-string edit)
+                  mi.value = mi.value.replace(/tou$/, 'you');
+                  mi.dispatchEvent(new InputEvent('input', { inputType: 'insertReplacementText', data: 'you', bubbles: true }));
                   setTimeout(() => {
                     const lines = [...document.querySelectorAll('#feed .line')].map(l => l.textContent);
                     window.typeAPI.log('TEST page lines: ' + JSON.stringify(lines));

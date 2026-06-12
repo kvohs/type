@@ -610,7 +610,7 @@
   }
   body.ios .hints-group[hidden] { display: none; }
   body.ios .hints .sep { display: none; }
-  body.ios .hint { padding: 14px 18px; margin: -14px -18px; }
+  body.ios .hints .hint { padding: 14px 18px; margin: -14px -18px; }   /* fat targets — bottom bar only, not the gear */
   body.ios #hintBurn .l { color: color-mix(in srgb, var(--ember) 60%, var(--ink-faint)); }
   body.ios .settings {
     top: calc(var(--vvt, 0px) + var(--vvh, 100vh) / 2);
@@ -2735,7 +2735,8 @@
       if (!introPlayed) playIntro(); else skipIntro();
       return true;
     };
-    const haptic = (kind) => { if (window.typeAPI.haptic) window.typeAPI.haptic(kind); };
+    let quiet = false;                 // true while reconciling a correction — no haptic machine-gun
+    const haptic = (kind) => { if (!quiet && window.typeAPI.haptic) window.typeAPI.haptic(kind); };
     const touchChar = (c) => {
       if (skipOrPlayIntro()) { dbg('drop (intro) ' + JSON.stringify(c)); return; }
       if (frozen) { dbg('drop (frozen) ' + JSON.stringify(c)); return; }
@@ -2746,7 +2747,11 @@
         return;
       }
       if (quotePlaying && quoteSkip) quoteSkip();
+      const lockedBefore = locked.length;
       pushChar(c); thock(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
+      // the line wrapped: the field must mirror only the NEW line, or a
+      // later correction would pop text that already rolled up and locked
+      if (locked.length !== lockedBefore) fieldReset(current);
       dbg('typed ' + JSON.stringify(c) + ' current=' + JSON.stringify(current));
     };
     const touchEnter = () => {
@@ -2755,6 +2760,7 @@
       if (cursor) { exitOverstrike(); return; }
       if (quotePlaying && quoteSkip) quoteSkip();
       commitLine(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
+      fieldReset('');                  // fresh line, fresh autocorrect context
     };
     const touchBackspace = (word) => {
       if (skipOrPlayIntro() || frozen) return;
@@ -2777,18 +2783,43 @@
       const v = mobileInput.value;
       if (v === fieldLast) return;
       unlockAudio();
-      let p = 0;
-      while (p < v.length && p < fieldLast.length && v[p] === fieldLast[p]) p++;
-      let s = 0;
-      while (s < v.length - p && s < fieldLast.length - p &&
-             v[v.length - 1 - s] === fieldLast[fieldLast.length - 1 - s]) s++;
-      const deleted = fieldLast.length - p - s;
-      const inserted = v.slice(p, v.length - s);
-      dbg('input: del=' + deleted + ' ins=' + JSON.stringify(inserted));
+      const oldV = fieldLast;
       fieldLast = v;
-      for (let i = 0; i < deleted; i++) touchBackspace(false);
-      for (const c of inserted) { if (c === '\n') touchEnter(); else touchChar(c); }
-      if (!mobileInput.value.startsWith(PREFIX)) fieldReset(mobileInput.value);  // ⌫ ate the head — restore it
+      const strip = (str) => str.replace(/\u200b/g, '');
+      if (!cursor && v.startsWith(oldV)) {
+        // pure append — the ordinary keystroke (or several at once)
+        dbg('append ' + JSON.stringify(strip(v.slice(oldV.length))));
+        for (const c of v.slice(oldV.length)) { if (c === '\n') touchEnter(); else touchChar(c); }
+      } else if (!cursor && oldV.startsWith(v)) {
+        // pure truncation — backspaces off the end
+        dbg('truncate ' + (oldV.length - v.length));
+        for (let i = 0; i < oldV.length - v.length; i++) touchBackspace(false);
+      } else if (!cursor) {
+        // a mid-string edit: autocorrect or a QuickType pick rewrote part of
+        // the word in place ("tou" → "you" swaps the t). End-of-line replays
+        // garble those, so rebuild the tail: pop what the field used to
+        // mirror, retype its new text. Wrap-aware; haptics stay quiet and
+        // the double-space trick is off so the retype is byte-faithful.
+        const oldTail = strip(oldV), newTail = strip(v);
+        dbg('reconcile ' + JSON.stringify(oldTail) + ' -> ' + JSON.stringify(newTail));
+        const pop = Math.min(oldTail.length, current.length);
+        quiet = true; pasting = true;
+        try {
+          if (pop > 0) { current = current.slice(0, current.length - pop); renderActive(); }
+          for (const c of newTail) { if (c === '\n') touchEnter(); else touchChar(c); }
+        } finally { quiet = false; pasting = false; }
+        persistDraft(); updateMeter();
+      } else {
+        // cursor parked up the page (editable / overstrike): plain end-ops
+        let p = 0;
+        while (p < v.length && p < oldV.length && v[p] === oldV[p]) p++;
+        let s = 0;
+        while (s < v.length - p && s < oldV.length - p &&
+               v[v.length - 1 - s] === oldV[oldV.length - 1 - s]) s++;
+        for (let i = 0; i < oldV.length - p - s; i++) touchBackspace(false);
+        for (const c of v.slice(p, v.length - s)) touchChar(c);
+      }
+      if (!mobileInput.value.startsWith(PREFIX)) fieldReset(strip(mobileInput.value));  // ⌫ ate the head — restore it
       fieldTrim();
     };
     mobileInput.addEventListener('input', handleFieldChange);
@@ -2853,6 +2884,10 @@
     };
     themePick.addEventListener('click', () => setTimeout(syncShellTheme, 0));
     syncShellTheme();
+
+    // a recovered draft restores after this block runs — once it has, the
+    // field mirrors the restored line so corrections have their context
+    setTimeout(() => { if (current) fieldReset(current); }, 120);
 
     // settings, tuned for the phone: no Zen (the app is already the whole
     // screen), no wallpaper share yet, and saves are a fact, not a chooser

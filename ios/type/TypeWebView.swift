@@ -72,7 +72,10 @@ struct TypeWebView: UIViewRepresentable {
             case "saveNote":
                 let content = body["content"] as? String ?? ""
                 let filename = body["filename"] as? String ?? "type.md"
-                NoteSaver.save(content: content, filename: filename)
+                NoteSaver.save(content: content, filename: filename) { dest in
+                    // the page mentions the destination on the kept-stamp
+                    self.webView?.evaluateJavaScript("window.__typeSaved && window.__typeSaved('\(dest)')")
+                }
             case "sendFeedback":
                 let text = body["body"] as? String ?? ""
                 sendFeedback(text)

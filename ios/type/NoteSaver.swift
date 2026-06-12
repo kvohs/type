@@ -27,21 +27,32 @@ enum DiagLog {
 #endif
 
 enum NoteSaver {
-    static func save(content: String, filename: String) {
+    static func save(content: String, filename: String, completion: ((String) -> Void)? = nil) {
         DispatchQueue.global(qos: .utility).async {
             let fm = FileManager.default
             let dir: URL
+            let dest: String
             if let ubiquity = fm.url(forUbiquityContainerIdentifier: nil) {
                 dir = ubiquity.appendingPathComponent("Documents", isDirectory: true)
+                dest = "icloud"
             } else {
                 dir = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                dest = "local"
             }
             do {
                 try fm.createDirectory(at: dir, withIntermediateDirectories: true)
                 let safe = filename.replacingOccurrences(of: "/", with: "-")
-                try content.data(using: .utf8)?.write(to: dir.appendingPathComponent(safe), options: .atomic)
+                let url = dir.appendingPathComponent(safe)
+                try content.data(using: .utf8)?.write(to: url, options: .atomic)
+                #if DEBUG
+                DiagLog.append("saved (\(dest)): \(url.path)")
+                #endif
+                DispatchQueue.main.async { completion?(dest) }
             } catch {
                 NSLog("type saveNote failed: %@", error.localizedDescription)
+                #if DEBUG
+                DiagLog.append("save FAILED: \(error.localizedDescription)")
+                #endif
             }
         }
     }

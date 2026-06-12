@@ -619,7 +619,11 @@
     pointer-events: none; gap: 0;     /* the .hint gap would split "type" from its period */
     font-weight: 700; font-size: 15px; letter-spacing: .03em;
     text-transform: none; color: var(--ink-quiet);
+    transition: opacity .3s ease;
   }
+  /* once the keyboard is up the wordmark's job is done — it bows out
+     (opacity, not display: keep & burn hold their edges) */
+  body.ios.kb-up .type-mark-hint { opacity: 0; }
   body.ios #hintBurn .l { color: color-mix(in srgb, var(--ember) 60%, var(--ink-faint)); }
   body.ios .settings {
     top: calc(var(--vvt, 0px) + var(--vvh, 100vh) / 2);
@@ -1900,7 +1904,8 @@
     // the page. Stamp animation is 2.0s; cleanup waits past that.
     setTimeout(() => {
       stampDate.textContent = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase().replace(/,/g,'');
-      stampKept.textContent = words === 1 ? '1 word kept' : `${words} words kept`;
+      stampKept.textContent = (words === 1 ? '1 word kept' : `${words} words kept`) +
+        (window.__typeSaveDest ? ' · ' + window.__typeSaveDest : '');   // iOS says where it landed
       stampEl.classList.remove('show'); void stampEl.offsetWidth;
       stampEl.classList.add('show');
       bell(0.1);
@@ -2698,6 +2703,8 @@
       const vv = window.visualViewport;
       document.documentElement.style.setProperty('--vvh', (vv ? vv.height : window.innerHeight) + 'px');
       document.documentElement.style.setProperty('--vvt', (vv ? vv.offsetTop : 0) + 'px');
+      // keyboard up = visual viewport noticeably shorter than the layout one
+      document.body.classList.toggle('kb-up', !!vv && vv.height < window.innerHeight - 90);
       computeCols(); reflowLocked(); layout();
     };
     if (window.visualViewport) {
@@ -2905,6 +2912,11 @@
     // a recovered draft restores after this block runs — once it has, the
     // field mirrors the restored line so corrections have their context
     setTimeout(() => { if (current) fieldReset(current); }, 120);
+
+    // the shell reports where a kept page landed; the stamp passes it on
+    window.__typeSaved = (dest) => {
+      window.__typeSaveDest = dest === 'icloud' ? 'in iCloud Drive' : 'on this iPhone';
+    };
 
     // settings, tuned for the phone: no Zen (the app is already the whole
     // screen), no wallpaper share yet, and saves are a fact, not a chooser

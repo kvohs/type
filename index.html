@@ -2676,23 +2676,30 @@
     }
     syncViewport();
 
-    // hidden, never-empty field: the sentinel means ⌫ always produces a
-    // beforeinput even with "nothing" to delete in the field itself
-    const SENTINEL = 'xx';
+    // The invisible field keeps the tail of the line you're typing, so iOS
+    // autocorrect, spell check, QuickPath and dictation have real text to
+    // work against. The page replays whatever changes in the field — an OS
+    // correction lands as backspaces + the fixed word, same as typing it.
     mobileInput = document.createElement('input');
     mobileInput.id = 'mobileInput';
     mobileInput.type = 'text';
     mobileInput.setAttribute('autocomplete', 'off');
-    mobileInput.setAttribute('autocorrect', 'off');
-    mobileInput.setAttribute('autocapitalize', 'off');
-    mobileInput.setAttribute('spellcheck', 'false');
+    mobileInput.setAttribute('autocorrect', 'on');
+    mobileInput.setAttribute('autocapitalize', 'sentences');
+    mobileInput.setAttribute('spellcheck', 'true');
     mobileInput.setAttribute('enterkeyhint', 'enter');
     document.body.appendChild(mobileInput);
-    const resetSentinel = () => {
-      if (mobileInput.value !== SENTINEL) mobileInput.value = SENTINEL;
-      try { mobileInput.setSelectionRange(SENTINEL.length, SENTINEL.length); } catch (err) {}
+    const PREFIX = '\u200b';            // zero-width space: never-empty head: ⌫ always changes the value
+    let fieldLast = PREFIX;
+    const caretToEnd = () => { try { mobileInput.setSelectionRange(mobileInput.value.length, mobileInput.value.length); } catch (err) {} };
+    const fieldReset = (text) => {
+      mobileInput.value = fieldLast = PREFIX + (text || '');
+      caretToEnd();
     };
-    resetSentinel();
+    const fieldTrim = () => {                // a line's tail is plenty of context — don't grow forever
+      if (mobileInput.value.length > 90) fieldReset(mobileInput.value.slice(-45).replace(/^\S*\s/, '').replace(/\u200b/g, ''));
+    };
+    fieldReset('');
 
     // the input covers the page, so a tap on the paper is a real tap on a
     // text field — iOS focuses it and presents the keyboard natively. Taps
@@ -2745,31 +2752,38 @@
     };
 
     // Read what the keyboard actually did to the field, not what an event
-    // claims it will do: diff the value against the sentinel, replay the
-    // difference onto the page, reset. This survives every input engine —
-    // plain taps, QuickPath swipes, dictation, autocorrect, hardware keys.
+    // claims it will do: diff the value against what it held last time and
+    // replay the difference onto the page. Autocorrect fixing "teh" → "the"
+    // arrives as 3 deletions + "the" — identical to a person retyping it.
+    // Survives every input engine: taps, QuickPath, dictation, hardware keys.
     const handleFieldChange = () => {
       const v = mobileInput.value;
-      if (v === SENTINEL) return;
+      if (v === fieldLast) return;
       unlockAudio();
-      // common prefix/suffix against the sentinel → deletions + insertions
       let p = 0;
-      while (p < v.length && p < SENTINEL.length && v[p] === SENTINEL[p]) p++;
+      while (p < v.length && p < fieldLast.length && v[p] === fieldLast[p]) p++;
       let s = 0;
-      while (s < v.length - p && s < SENTINEL.length - p &&
-             v[v.length - 1 - s] === SENTINEL[SENTINEL.length - 1 - s]) s++;
-      const deleted = SENTINEL.length - p - s;
+      while (s < v.length - p && s < fieldLast.length - p &&
+             v[v.length - 1 - s] === fieldLast[fieldLast.length - 1 - s]) s++;
+      const deleted = fieldLast.length - p - s;
       const inserted = v.slice(p, v.length - s);
-      if (window.typeAPI && window.typeAPI.debug && window.typeAPI.log) {
-        window.typeAPI.log('input: value=' + JSON.stringify(v) + ' del=' + deleted + ' ins=' + JSON.stringify(inserted));
-      }
+      dbg('input: del=' + deleted + ' ins=' + JSON.stringify(inserted));
+      fieldLast = v;
       for (let i = 0; i < deleted; i++) touchBackspace(false);
       for (const c of inserted) { if (c === '\n') touchEnter(); else touchChar(c); }
-      resetSentinel();
+      if (!mobileInput.value.startsWith(PREFIX)) fieldReset(mobileInput.value);  // ⌫ ate the head — restore it
+      fieldTrim();
     };
     mobileInput.addEventListener('input', handleFieldChange);
-    // paste lands via the window-level paste handler; keep it out of the field
-    mobileInput.addEventListener('paste', () => { setTimeout(resetSentinel, 0); });
+    // Enter doesn't change a single-line field — the window keydown handler
+    // commits the page line; the field just starts its context fresh
+    mobileInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') setTimeout(() => fieldReset(''), 0);
+    });
+    // paste lands via the window-level paste handler; resync the field after
+    mobileInput.addEventListener('paste', () => { setTimeout(() => fieldReset(current), 0); });
+    // the page is append-only — a stray caret move would desync the replay
+    mobileInput.addEventListener('focus', caretToEnd);
     if (window.typeAPI && window.typeAPI.debug && window.typeAPI.log) {
       ['focus', 'blur', 'keydown', 'beforeinput', 'compositionstart', 'compositionend'].forEach(ev => {
         mobileInput.addEventListener(ev, (e) => {

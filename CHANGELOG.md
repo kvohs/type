@@ -6,6 +6,13 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.6.0
+
+### New
+- **Editable page.** A new switch in settings unlocks the page: the arrow keys move the cursor back through everything you've written, and you can edit it like a normal document — insert, delete, fix the typo three lines up. The paper rolls back down so the line you're editing sits right at the strike point. It's a decision you make before you write: once there's ink on the page the switch dims and stays put until the next sheet, so you can't bail out of a locked page halfway through. Off by default — the typewriter is still the typewriter.
+
+---
+
 ## v1.5.2
 
 ### Fixed

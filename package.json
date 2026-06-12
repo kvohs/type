@@ -1,7 +1,7 @@
 {
   "name": "type",
   "productName": "type",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "description": "A single sheet of paper. Type, then keep it or burn it.",
   "main": "main.js",
   "author": "Kelly Vohs",
@@ -47,6 +47,9 @@
       ],
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
+      "extendInfo": {
+        "NSPrefersDisplaySafeAreaCompatibilityMode": false
+      },
       "x64ArchFiles": "Contents/Resources/type-share",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,

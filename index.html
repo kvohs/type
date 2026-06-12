@@ -214,6 +214,10 @@
   .ch.overstrike { background: currentColor; color: var(--paper); border-radius: 1px; }
   .ch.overstrike.trailing { opacity: .35; }   /* faint block when the cursor sits past the last char */
   .stage.overstriking .caret { opacity: 0; }  /* hide the active line's caret while a prior line holds the cursor */
+  /* editable page: the cursor on a prior line is a normal insertion bar, not a
+     block — re-shown over the rule above that hides carets while overstriking */
+  .stage.overstriking .caret.edit { opacity: .9; animation: blink 780ms steps(1, end) infinite; }
+  .stage.typing .caret.edit { animation: none; opacity: .9; }
 
   /* blinking bar cursor — rests (solid) while typing */
   .caret {
@@ -473,6 +477,8 @@
   .setrow input:checked ~ .sw { background: var(--accent); }
   .setrow input:checked ~ .sw::after { transform: translateX(16px); }
   .setdiv { height: 1px; background: var(--rule); margin: 6px 0; }
+  /* a row that can't change right now (editable mode mid-page) — dimmed, still hoverable for the info tip */
+  .setrow.setrow-locked { opacity: .45; }
   .setrow-btn { cursor: pointer; gap: 12px; }
   .setrow-btn[hidden] { display: none; }
   /* Sound sub-rows — only shown when Sound itself is on. Indent + slightly
@@ -629,6 +635,7 @@
     <div class="setdiv"></div>
     <label class="setrow"><span>Zen mode <span class="info" tabindex="0">i<span class="tip">Goes fullscreen. Just you and the page. ⌘⇧F to toggle, Esc to exit.</span></span></span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
     <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top <span class="info" tabindex="0">i<span class="tip">Keeps the type window above all others. Good for jotting while reading something else.</span></span></span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
+    <label class="setrow" id="rowEditable"><span>Editable page <span class="info" tabindex="0">i<span class="tip">Unlocks the page — the arrow keys move the cursor back through what you've written, and you can edit it. Set it before you start: it locks in once you've typed.</span></span></span><input type="checkbox" id="setEditable" /><span class="sw"></span></label>
     <label class="setrow"><span>Burn if I stop</span><span class="setpick burnsecs" id="burnAfterVal" hidden>10s</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
     <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
     <label class="setrow"><span>Pages</span><input type="checkbox" id="setPages" /><span class="sw"></span></label>
@@ -748,7 +755,7 @@
   })();
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, quoteOpen: true, quoteBurn: true, saveDir: '' };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -756,10 +763,13 @@
   const applyTheme = () => {
     THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), editable: document.getElementById('setEditable'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
+      // editable mode is a decision you make before you write — once there's
+      // ink on the page, the switch stays where it was until the next sheet
+      if (k === 'editable' && sheetStarted()) { boxes[k].checked = !!settings.editable; return; }
       settings[k] = boxes[k].checked;
       saveSettings();
       if (k === 'zen')   applyZen();
@@ -917,6 +927,13 @@
   let activeQuote = null;          // the quote object currently on the page — used by the share button
   const QUOTE_HOLD_ROWS = 3;       // lines you can type beneath a quote before it starts rolling up
 
+  // "started" = your own ink is on the sheet (a still-typing seeded quote or
+  // welcome doesn't count). Gates the editable-page switch: it can only flip
+  // between sheets, never mid-page.
+  const rowEditable = document.getElementById('rowEditable');
+  function sheetStarted() { return !quotePlaying && (locked.length > userFloor || current.length > 0); }
+  function updateEditableLock() { rowEditable.classList.toggle('setrow-locked', sheetStarted()); }
+
   /* ================= SOUND ================= */
   let actx = null;
   const AC = () => {
@@ -1059,14 +1076,19 @@
     const el = feed.children[i];
     if (!el) return;
     const text = locked[i] || '';
+    const onLine = cursor && cursor.line === i;
+    const editing = onLine && settings.editable;       // editable page: bar caret, not the block
+    const editCaret = () => { const c = caretEl(); c.classList.add('edit'); return c; };
     el.textContent = '';
     for (let k = 0; k < text.length; k++) {
+      if (editing && cursor.col === k) el.appendChild(editCaret());
       const s = document.createElement('span');
-      s.className = 'ch' + (cursor && cursor.line === i && cursor.col === k ? ' overstrike' : '');
+      s.className = 'ch' + (onLine && !settings.editable && cursor.col === k ? ' overstrike' : '');
       s.textContent = text[k] === ' ' ? ' ' : text[k];
       el.appendChild(s);
     }
-    if (cursor && cursor.line === i && cursor.col >= text.length) {
+    if (onLine && cursor.col >= text.length) {
+      if (editing) { el.appendChild(editCaret()); return; }
       const s = document.createElement('span');
       s.className = 'ch overstrike trailing';
       s.textContent = ' ';
@@ -1109,6 +1131,34 @@
     renderLockedLine(i);
     thock(); markTyping(); resetSmolder(); persistDraft(); updateMeter();
   }
+  /* editable page — when the setting is on, the cursor on a committed line
+     inserts and deletes like a normal editor instead of only x-striking.
+     Lines keep the typewriter measure: a full line won't take more ink. */
+  function editRefresh(i) {
+    const el = feed.children[i];
+    if (el) applyMdClass(el, locked[i]);             // edits can create or break a "- " / "> " / "# " marker
+    cursor.col = Math.max(markerLen(i), Math.min(cursor.col, locked[i].length));
+    renderLockedLine(i);
+    thock(); markTyping(); resetSmolder(); persistDraft(); updateMeter();
+  }
+  function editInsert(c) {
+    const i = cursor.line, t = locked[i];
+    if (t.length >= MAX_COLS) return;                // hit the margin — even an unlocked page keeps the measure
+    locked[i] = t.slice(0, cursor.col) + c + t.slice(cursor.col);
+    cursor.col++;
+    editRefresh(i);
+  }
+  function editDelete() {
+    const i = cursor.line;
+    if (cursor.col > markerLen(i)) {
+      locked[i] = locked[i].slice(0, cursor.col - 1) + locked[i].slice(cursor.col);
+      cursor.col--;
+      editRefresh(i);
+    } else if (i > 0) {                              // start of a line: hop to the end of the one above (lines don't merge)
+      cursor.line--; cursor.col = locked[cursor.line].length;
+      renderLockedLine(i); renderLockedLine(cursor.line); layout();
+    }
+  }
   function moveOverstrike(key) {
     if (key === 'ArrowUp') {
       if (cursor) {
@@ -1122,6 +1172,14 @@
       }
     } else if (key === 'ArrowDown') {
       if (!cursor) return;
+      // editable page: ↓ walks back down one line at a time; past the last
+      // committed line it lands on the writing line as usual
+      if (settings.editable && cursor.line < locked.length - 1) {
+        const prev = cursor.line; cursor.line++;
+        cursor.col = Math.max(markerLen(cursor.line), Math.min(cursor.col, locked[cursor.line].length));
+        renderLockedLine(prev); renderLockedLine(cursor.line); layout();
+        return;
+      }
       exitOverstrike();                              // ↓ always returns to writing, no matter how far up you went
     } else if (key === 'ArrowLeft') {
       if (!cursor) return;
@@ -1606,7 +1664,11 @@
     // the page stays put — overstriking moves only the block cursor across the
     // committed lines that are already visible, never the page itself
     let offset = 0;
-    if (quoteHold) {
+    if (cursor && settings.editable) {
+      // editable page: roll the platen back so the line under the cursor
+      // comes down to the strike point — the words come to you
+      offset = locked.length - cursor.line;
+    } else if (quoteHold) {
       const d = locked.length - quoteHold.floor;    // lines you've committed since the quote
       const H = QUOTE_HOLD_ROWS;
       if (d <= H) offset = d;                       // hold: quote frozen, cursor descends
@@ -2099,8 +2161,10 @@
     setStatsWords.textContent = settings.wordCount ? wordsText : '';
     setStatsPages.textContent = settings.pages     ? pagesText : '';
     setStatsTime.textContent  = settings.timer     ? timeText  : '';
+    updateEditableLock();
   }
   setInterval(updateMeter, 1000);
+  updateMeter();
 
   /* ================= QUOTE REMOVE (×) + SHARE (↑) ================= */
   function positionQuoteX() {
@@ -2364,9 +2428,15 @@
       return;
     }
 
-    // while the cursor sits on a prior line, only 'x' covers it; Enter exits; ⌫ scrubs left without deleting
+    // while the cursor sits on a prior line, only 'x' covers it; Enter exits; ⌫ scrubs left without deleting.
+    // on an editable page the same cursor just edits: type to insert, ⌫ to delete.
     if (cursor) {
       if (e.key === 'Enter') { e.preventDefault(); exitOverstrike(); return; }
+      if (settings.editable) {
+        if (e.key === 'Backspace') { e.preventDefault(); editDelete(); return; }
+        if (e.key.length === 1) { e.preventDefault(); editInsert(e.key); return; }
+        return;
+      }
       if (e.key === 'Backspace') {
         e.preventDefault();
         const prev = cursor.line;

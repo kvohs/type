@@ -15,11 +15,18 @@ struct TypeWebView: UIViewRepresentable {
         config.allowsInlineMediaPlayback = true
 
         let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
+        #if DEBUG
+        let debugFlag = "true"
+        #else
+        let debugFlag = "false"
+        #endif
         // typeAPI lands before the page script runs, same contract as preload.js
         let bridge = """
         window.typeAPI = {
           isDesktop: false,
           isIOS: true,
+          debug: \(debugFlag),
+          log: (m) => window.webkit.messageHandlers.type.postMessage({ action: 'log', message: String(m) }),
           version: '\(version)',
           saveNote: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'saveNote', content: p && p.content || '', filename: p && p.filename || 'type.md' }),
           sendFeedback: (p) => new Promise((resolve) => {
@@ -64,17 +71,56 @@ struct TypeWebView: UIViewRepresentable {
             case "sendFeedback":
                 let text = body["body"] as? String ?? ""
                 sendFeedback(text)
+            case "log":
+                #if DEBUG
+                // web-side diagnostics: visible in the console AND pullable
+                // off-device via `devicectl device copy from` (Documents/type-diag.log)
+                let line = body["message"] as? String ?? ""
+                NSLog("type-web: %@", line)
+                DiagLog.append(line)
+                #endif
             default:
                 break
             }
         }
 
         #if DEBUG
-        // `simctl launch ... -typeTestSave` drives the full saveNote chain
-        // (JS bridge → message handler → NoteSaver → disk) without the GUI
+        // GUI-free test hooks for `simctl launch` / `devicectl launch`:
+        //   -typeTestSave  drives the full saveNote chain (bridge → disk)
+        //   -typeTestType  replays keyboard-style value changes through the
+        //                  hidden field exactly as WebKit does after native
+        //                  insertion (mutate value, dispatch 'input'), then
+        //                  logs the page's writing-line state
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            guard ProcessInfo.processInfo.arguments.contains("-typeTestSave") else { return }
-            webView.evaluateJavaScript("window.typeAPI.saveNote({ content: '# bridge test\\n', filename: 'bridge-test.md' })")
+            let args = ProcessInfo.processInfo.arguments
+            if args.contains("-typeTestSave") {
+                webView.evaluateJavaScript("window.typeAPI.saveNote({ content: '# bridge test\\n', filename: 'bridge-test.md' })")
+            }
+            if args.contains("-typeTestType") {
+                let js = """
+                setTimeout(() => {
+                  const mi = document.getElementById('mobileInput');
+                  if (!mi) { window.typeAPI.log('TEST: no mobileInput'); return; }
+                  mi.focus();
+                  const sendChar = (ch) => {
+                    mi.value = mi.value + ch;                 // what native insertion does
+                    mi.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: ch, bubbles: true }));
+                  };
+                  const sendBackspace = () => {
+                    mi.value = mi.value.slice(0, -1);
+                    mi.dispatchEvent(new InputEvent('input', { inputType: 'deleteContentBackward', bubbles: true }));
+                  };
+                  for (const c of 'ok hi') sendChar(c);
+                  sendBackspace();
+                  sendChar('!');
+                  setTimeout(() => {
+                    const lines = [...document.querySelectorAll('#feed .line')].map(l => l.textContent);
+                    window.typeAPI.log('TEST page lines: ' + JSON.stringify(lines));
+                  }, 300);
+                }, 4000);
+                """
+                webView.evaluateJavaScript(js)
+            }
         }
         #endif
 
@@ -137,7 +183,10 @@ final class AccessoryHidingWebView: WKWebView {
 
     override init(frame: CGRect, configuration: WKWebViewConfiguration) {
         super.init(frame: frame, configuration: configuration)
-        hideAccessoryBar()
+        // hideAccessoryBar() — DISABLED: on real hardware (iOS 26) the dynamic
+        // subclass kills UITextInput insertion entirely: keydown events still
+        // reach the page but no character ever lands in the field. The shortcut
+        // bar is chrome we'd rather lose, but typing comes first.
     }
 
     required init?(coder: NSCoder) { fatalError() }

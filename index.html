@@ -2666,12 +2666,24 @@
     // tap the paper, get the keyboard — but not when tapping controls
     const summon = () => { try { mobileInput.focus({ preventScroll: true }); } catch (err) { mobileInput.focus(); } };
     const updateEl = document.getElementById('update');
+    const onControls = (t) => settingsEl.contains(t) || hints.contains(t) ||
+      (updateEl && updateEl.contains(t));
     document.addEventListener('touchend', (e) => {
-      const t = e.target;
-      if (settingsEl.contains(t) || hints.contains(t) || quoteX.contains(t) ||
-          (updateEl && updateEl.contains(t))) return;
+      if (onControls(e.target) || quoteX.contains(e.target)) return;
       summon();
     }, { passive: true });
+    // iOS follows each tap with a synthetic mousedown that lands on the
+    // unfocusable paper and silently steals focus — keyboard up, typing
+    // dead. Pin it: any blur not caused by touching a control refocuses
+    // immediately (still inside the tap's gesture window, so iOS allows it).
+    let controlTouch = false;
+    document.addEventListener('touchstart', (e) => {
+      controlTouch = onControls(e.target);
+    }, { passive: true, capture: true });
+    mobileInput.addEventListener('blur', () => {
+      if (controlTouch) return;
+      setTimeout(() => { if (!controlTouch) summon(); }, 0);
+    });
 
     const skipOrPlayIntro = () => {
       if (phase !== 'intro') return false;
@@ -2705,24 +2717,39 @@
       markTyping(); nudgeHints(); resetSmolder(); persistDraft(); updateMeter();
     };
 
-    mobileInput.addEventListener('beforeinput', (e) => {
-      const t = e.inputType;
-      if (t === 'insertFromPaste') { e.preventDefault(); return; }       // the window paste handler owns it
-      if (t === 'insertReplacementText') { e.preventDefault(); return; } // OS corrections don't rewrite the page
-      e.preventDefault();
+    // Read what the keyboard actually did to the field, not what an event
+    // claims it will do: diff the value against the sentinel, replay the
+    // difference onto the page, reset. This survives every input engine —
+    // plain taps, QuickPath swipes, dictation, autocorrect, hardware keys.
+    const handleFieldChange = () => {
+      const v = mobileInput.value;
+      if (v === SENTINEL) return;
       unlockAudio();
-      if (t === 'insertText' || t === 'insertCompositionText') {
-        for (const c of (e.data || '')) { if (c === '\n') touchEnter(); else touchChar(c); }
-      } else if (t === 'insertLineBreak' || t === 'insertParagraph') {
-        touchEnter();
-      } else if (t === 'deleteContentBackward') {
-        touchBackspace(false);
-      } else if (t === 'deleteWordBackward') {
-        touchBackspace(true);
+      // common prefix/suffix against the sentinel → deletions + insertions
+      let p = 0;
+      while (p < v.length && p < SENTINEL.length && v[p] === SENTINEL[p]) p++;
+      let s = 0;
+      while (s < v.length - p && s < SENTINEL.length - p &&
+             v[v.length - 1 - s] === SENTINEL[SENTINEL.length - 1 - s]) s++;
+      const deleted = SENTINEL.length - p - s;
+      const inserted = v.slice(p, v.length - s);
+      if (window.typeAPI && window.typeAPI.debug && window.typeAPI.log) {
+        window.typeAPI.log('input: value=' + JSON.stringify(v) + ' del=' + deleted + ' ins=' + JSON.stringify(inserted));
       }
+      for (let i = 0; i < deleted; i++) touchBackspace(false);
+      for (const c of inserted) { if (c === '\n') touchEnter(); else touchChar(c); }
       resetSentinel();
-    });
-    mobileInput.addEventListener('input', resetSentinel);
+    };
+    mobileInput.addEventListener('input', handleFieldChange);
+    // paste lands via the window-level paste handler; keep it out of the field
+    mobileInput.addEventListener('paste', () => { setTimeout(resetSentinel, 0); });
+    if (window.typeAPI && window.typeAPI.debug && window.typeAPI.log) {
+      ['focus', 'blur', 'keydown', 'beforeinput', 'compositionstart', 'compositionend'].forEach(ev => {
+        mobileInput.addEventListener(ev, (e) => {
+          window.typeAPI.log(ev + (e.key ? ' key=' + e.key : '') + (e.inputType ? ' type=' + e.inputType : '') + (typeof e.data === 'string' ? ' data=' + JSON.stringify(e.data) : ''));
+        });
+      });
+    }
 
     // settings, tuned for the phone: no Zen (the app is already the whole
     // screen), no wallpaper share yet, and saves are a fact, not a chooser

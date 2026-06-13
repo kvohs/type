@@ -2938,6 +2938,13 @@
       else window.__typeSaveDest = dest === 'icloud' ? 'in iCloud Drive' : 'on this iPhone';
     };
 
+    // shake the phone → the feedback sheet (the shell forwards the shake)
+    window.__typeShake = () => {
+      if (feedbackMode || frozen || phase !== 'writing') return;
+      haptic('return');
+      enterFeedbackMode();
+    };
+
     // settings, tuned for the phone: no Zen (the app is already the whole
     // screen), no wallpaper share yet. The save row is a real chooser —
     // any folder Files can reach, including the one the desktop writes to.

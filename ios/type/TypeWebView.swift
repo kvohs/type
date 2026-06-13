@@ -246,6 +246,15 @@ struct TypeWebView: UIViewRepresentable {
 // chrome. Overriding inputAccessoryView on the content view's dynamic
 // subclass (a public UIResponder property) removes it.
 final class AccessoryHidingWebView: WKWebView {
+    // shake → the feedback sheet. Motion events ride the responder chain up
+    // from the focused content view, so the webview hears every shake.
+    override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+        if motion == .motionShake {
+            evaluateJavaScript("window.__typeShake && window.__typeShake()")
+        }
+        super.motionEnded(motion, with: event)
+    }
+
     private static var hiddenClassesByContent: [String: AnyClass] = [:]
 
     override init(frame: CGRect, configuration: WKWebViewConfiguration) {

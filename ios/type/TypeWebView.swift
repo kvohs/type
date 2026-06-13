@@ -41,7 +41,7 @@ struct TypeWebView: UIViewRepresentable {
           setShellTheme: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'setShellTheme', bg: p && p.bg || '#ffffff', dark: !!(p && p.dark) }),
           sendFeedback: (p) => new Promise((resolve) => {
             window.__typeFeedbackResolve = resolve;
-            window.webkit.messageHandlers.type.postMessage({ action: 'sendFeedback', body: p && p.body || '' });
+            window.webkit.messageHandlers.type.postMessage({ action: 'sendFeedback', body: p && p.body || '', screenshot: p && p.screenshot || null });
           }),
         };
         """
@@ -122,7 +122,7 @@ struct TypeWebView: UIViewRepresentable {
                 }
             case "sendFeedback":
                 let text = body["body"] as? String ?? ""
-                sendFeedback(text)
+                sendFeedback(text, screenshot: body["screenshot"] as? String)
             case "haptic":
                 Haptics.play(body["kind"] as? String ?? "key")
             case "pickFolder":
@@ -211,7 +211,7 @@ struct TypeWebView: UIViewRepresentable {
 
         // mirror of the desktop flow: show exactly what's about to leave the
         // phone, then POST { body, version } — the recipient lives server-side
-        private func sendFeedback(_ text: String) {
+        private func sendFeedback(_ text: String, screenshot: String? = nil) {
             let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !body.isEmpty else { resolveFeedback(ok: false, error: "empty feedback"); return }
             guard let root = webView?.window?.rootViewController else { resolveFeedback(ok: false, error: "no window"); return }
@@ -226,7 +226,9 @@ struct TypeWebView: UIViewRepresentable {
                 req.httpMethod = "POST"
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
-                req.httpBody = try? JSONSerialization.data(withJSONObject: ["body": body, "version": version + " (ios)"])
+                var json: [String: Any] = ["body": body, "version": version + " (ios)"]
+                if let screenshot, screenshot.count <= 8_000_000 { json["screenshot"] = screenshot }
+                req.httpBody = try? JSONSerialization.data(withJSONObject: json)
                 URLSession.shared.dataTask(with: req) { _, response, error in
                     DispatchQueue.main.async {
                         if let error { self.resolveFeedback(ok: false, error: error.localizedDescription); return }
@@ -246,11 +248,19 @@ struct TypeWebView: UIViewRepresentable {
 // chrome. Overriding inputAccessoryView on the content view's dynamic
 // subclass (a public UIResponder property) removes it.
 final class AccessoryHidingWebView: WKWebView {
-    // shake → the feedback sheet. Motion events ride the responder chain up
-    // from the focused content view, so the webview hears every shake.
+    // shake → snapshot the page as it looks right now, then the feedback
+    // sheet opens with the shot riding along. Motion events ride the
+    // responder chain up from the focused content view, so the webview
+    // hears every shake.
     override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
         if motion == .motionShake {
-            evaluateJavaScript("window.__typeShake && window.__typeShake()")
+            takeSnapshot(with: WKSnapshotConfiguration()) { [weak self] image, _ in
+                var arg = "null"
+                if let jpeg = image?.jpegData(compressionQuality: 0.7) {
+                    arg = "'data:image/jpeg;base64,\(jpeg.base64EncodedString())'"
+                }
+                self?.evaluateJavaScript("window.__typeShake && window.__typeShake(\(arg))")
+            }
         }
         super.motionEnded(motion, with: event)
     }

@@ -2000,6 +2000,7 @@
   // page is stashed in memory (and the existing on-disk draft is left alone
   // as a safety net), then restored when you send or cancel.
   let feedbackMode = false;
+  let pendingShot = null;          // window capture riding along with the next feedback send
   let stashedSheet = null;
   const feedbackLabel = document.getElementById('feedbackLabel');
   const feedbackPaused = document.getElementById('feedbackPaused');
@@ -2065,6 +2066,8 @@
   function exitFeedbackMode(sent) {
     if (!feedbackMode) return;
     feedbackMode = false;
+    pendingShot = null;
+    feedbackLabel.textContent = 'feedback';
     document.body.classList.remove('feedback');
     hintsNormal.hidden = false;
     hintsFeedback.hidden = true;
@@ -2112,7 +2115,7 @@
     const text = lines.join('\n').replace(/^\n+/, '').trimEnd();
     if (!text) return;   // nothing typed
     if (!window.typeAPI || !window.typeAPI.sendFeedback) return;
-    const res = await window.typeAPI.sendFeedback({ body: text });
+    const res = await window.typeAPI.sendFeedback({ body: text, screenshot: pendingShot || undefined });
     if (res && res.ok) exitFeedbackMode(true);
     // if cancelled in the confirm dialog or errored, stay in feedback mode
     // (user can edit and try again, or hit esc)
@@ -2565,7 +2568,24 @@
       if (feedbackMode) sendFeedback(); else save();
       return;
     }
-    if (mod && (e.key === 'b' || e.key === 'B')) {
+    // ⌘⇧B — file a report: capture the window as it looks right now, then
+    // open the feedback sheet with the shot riding along (same shortcut as
+    // Dispatch's work board). Checked before ⌘B so a held shift never burns.
+    if (mod && e.shiftKey && (e.key === 'b' || e.key === 'B')) {
+      e.preventDefault();
+      if (feedbackMode || frozen) return;
+      const open = () => {
+        enterFeedbackMode();
+        if (pendingShot) feedbackLabel.textContent = 'feedback · screenshot attached';
+      };
+      if (window.typeAPI && window.typeAPI.captureFeedback) {
+        window.typeAPI.captureFeedback().then((shot) => { pendingShot = shot || null; open(); });
+      } else {
+        open();
+      }
+      return;
+    }
+    if (mod && !e.shiftKey && (e.key === 'b' || e.key === 'B')) {
       e.preventDefault();
       if (feedbackMode) return;   // burn is meaningless in feedback mode
       burn();
@@ -2938,11 +2958,14 @@
       else window.__typeSaveDest = dest === 'icloud' ? 'in iCloud Drive' : 'on this iPhone';
     };
 
-    // shake the phone → the feedback sheet (the shell forwards the shake)
-    window.__typeShake = () => {
+    // shake the phone → the feedback sheet, with a snapshot of the page as
+    // it looked at the shake (the shell captures before the sheet covers it)
+    window.__typeShake = (shot) => {
       if (feedbackMode || frozen || phase !== 'writing') return;
       haptic('return');
+      pendingShot = shot || null;
       enterFeedbackMode();
+      if (pendingShot) feedbackLabel.textContent = 'feedback · screenshot attached';
     };
 
     // settings, tuned for the phone: no Zen (the app is already the whole

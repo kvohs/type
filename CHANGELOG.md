@@ -6,6 +6,11 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.8.0
+
+### New
+- **⌘⇧B — report with a screenshot.** The same shortcut the Dispatch work board uses: it captures the page exactly as it looks (just the window, no screen-recording permission), opens the feedback sheet with the shot attached, and the report lands with the screenshot included. Plain ⌘B still burns — the shift makes all the difference.
+
 ## v1.7.0
 
 ### New

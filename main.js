@@ -149,7 +149,13 @@ ipcMain.handle('type:send-feedback', async (e, payload) => {
     const res = await fetch(FEEDBACK_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ body, version: APP_VERSION }),
+      body: JSON.stringify({
+        body,
+        version: APP_VERSION,
+        // optional window capture (cmd-shift-B) -> lands on the work-board ticket
+        screenshot: (payload && typeof payload.screenshot === 'string' && payload.screenshot.length <= 8000000)
+          ? payload.screenshot : undefined,
+      }),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -159,6 +165,18 @@ ipcMain.handle('type:send-feedback', async (e, payload) => {
   } catch (err) {
     log.error('feedback send error', err);
     return { ok: false, error: String(err && err.message || err) };
+  }
+});
+
+// cmd-shift-B captures the app window (not the screen, so no permission
+// prompt) for a feedback report; same trick as Dispatch's work board.
+ipcMain.handle('type:capture-feedback', async (e) => {
+  try {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const img = await win.webContents.capturePage();
+    return (img && !img.isEmpty()) ? img.toDataURL() : null;
+  } catch (err) {
+    return null;
   }
 });
 

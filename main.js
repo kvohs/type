@@ -121,6 +121,34 @@ ipcMain.handle('type:share-image', async (_e, payload) => {
   }
 });
 
+// share a kept note: hand the actual .md to the same native share sheet the
+// image path uses. iOS shares the .md file via its own share sheet; this is the
+// Mac parity (the renderer's navigator.share fallback is unavailable in Electron).
+ipcMain.handle('type:share-note', async (_e, payload) => {
+  try {
+    const filename = (payload && payload.filename) || 'type-note.md';
+    // prefer the real saved file (same dir resolution as list/read-note); fall
+    // back to a temp copy of the text if it isn't on disk where we expect.
+    const dir = (payload && payload.dir) || app.getPath('downloads');
+    let file = path.join(dir, filename);
+    if (!fs.existsSync(file)) {
+      file = path.join(os.tmpdir(), filename.replace(/[^\w.\-]/g, '_'));
+      fs.writeFileSync(file, (payload && payload.text) || '');
+    }
+
+    const bin = app.isPackaged
+      ? path.join(process.resourcesPath, 'type-share')
+      : path.join(__dirname, 'build', 'type-share');
+    if (!fs.existsSync(bin)) return { ok: false, error: 'share helper missing at ' + bin };
+
+    const child = spawn(bin, [file], { detached: true, stdio: 'ignore' });
+    child.unref();
+    return { ok: true, file };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err) };
+  }
+});
+
 // --- feedback ---
 // renderer hands us the feedback text. we show a native confirm dialog
 // (so the user can see exactly what's about to leave the machine), then
@@ -191,6 +219,71 @@ ipcMain.handle('type:save-note', async (_e, payload) => {
   } catch (err) {
     return { ok: false, error: String(err && err.message || err) };
   }
+});
+
+// --- kept notes (review drawer): list / read / delete the .md files in the
+// save folder, so the desktop drawer reads your real pages, not sample data.
+// Mirrors the iOS NoteSaver so the renderer gets identical objects. ---
+function parseNoteFile(text) {
+  let dateISO = null, kept = null, words = null, body = text;
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (m) {
+    const fm = m[1];
+    const d = fm.match(/^date:\s*(.+)$/m);  if (d) dateISO = d[1].trim();
+    const k = fm.match(/^kept:\s*(.+)$/m);  if (k) kept = k[1].trim();
+    const w = fm.match(/^words:\s*(\d+)/m); if (w) words = parseInt(w[1], 10);
+    body = text.slice(m[0].length);
+  }
+  body = body.replace(/^\n+/, '').replace(/\s+$/, '');   // drop the blank line after frontmatter + trailing space
+  if (words == null) words = (body.match(/\S+/g) || []).length;
+  return { dateISO, kept, words, body };
+}
+ipcMain.handle('type:list-notes', async (_e, dir) => {
+  try {
+    const d = dir || app.getPath('downloads');
+    if (!fs.existsSync(d)) return [];
+    const out = [];
+    for (const f of fs.readdirSync(d)) {
+      if (!f.toLowerCase().endsWith('.md')) continue;
+      try {
+        const p = parseNoteFile(fs.readFileSync(path.join(d, f), 'utf8'));
+        out.push({ filename: f, dateISO: p.dateISO, kept: p.kept, words: p.words, body: p.body });
+      } catch (_) {}
+    }
+    // newest first by day, then filename (filenames carry the full timestamp)
+    out.sort((a, b) => {
+      const x = a.dateISO || '', y = b.dateISO || '';
+      if (x !== y) return x < y ? 1 : -1;
+      return a.filename < b.filename ? 1 : -1;
+    });
+    return out;
+  } catch (e) { return []; }
+});
+ipcMain.handle('type:read-note', async (_e, payload) => {
+  try {
+    const dir = (payload && payload.dir) || app.getPath('downloads');
+    const filename = payload && payload.filename;
+    if (!filename) return '';
+    return parseNoteFile(fs.readFileSync(path.join(dir, filename), 'utf8')).body;
+  } catch (e) { return ''; }
+});
+ipcMain.handle('type:delete-note', async (_e, payload) => {
+  try {
+    const dir = (payload && payload.dir) || app.getPath('downloads');
+    const filename = payload && payload.filename;
+    if (!filename) return false;
+    fs.unlinkSync(path.join(dir, filename));
+    return true;
+  } catch (e) { return false; }
+});
+// open the save folder in Finder so the user can see their plain .md files
+ipcMain.handle('type:open-folder', async (_e, dir) => {
+  try {
+    const d = dir || app.getPath('downloads');
+    fs.mkdirSync(d, { recursive: true });
+    const err = await shell.openPath(d);
+    return { ok: !err, error: err || undefined };
+  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 });
 
 // --- auto-update ---

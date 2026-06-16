@@ -173,7 +173,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# the iOS app ships the same single-file app the desktop wraps —\n# copied fresh from the repo root on every build, never edited here\ncp \"$SRCROOT/../index.html\" \"$SRCROOT/type/web/index.html\"\ncp \"$SRCROOT/../quotes.js\"  \"$SRCROOT/type/web/quotes.js\"\n";
+			shellScript = "# the iOS app ships the same single-file app the desktop wraps —\n# copied fresh from the repo root on every build, never edited here\ncp \"$SRCROOT/../index.html\" \"$SRCROOT/type/web/index.html\"\ncp \"$SRCROOT/../quotes.js\"  \"$SRCROOT/type/web/quotes.js\"\n# native-text spike (this branch only): the hardened contenteditable surface\ncp \"$SRCROOT/../prototype/native.html\" \"$SRCROOT/type/web/native.html\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

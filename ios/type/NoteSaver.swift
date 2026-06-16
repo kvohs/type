@@ -81,4 +81,115 @@ enum NoteSaver {
             }
         }
     }
+
+    // ---- reading kept pages (for the kept-notes review screen) ----
+    // Resolve the folder pages actually live in, mirroring save()'s order:
+    // a folder the user picked → iCloud Drive → type → local Documents.
+    // Returns the directory and, when it's the security-scoped picked folder,
+    // that same URL so the caller can stop accessing it when done.
+    private static func keptDir() -> (dir: URL, scoped: URL?)? {
+        let fm = FileManager.default
+        if let bookmark = UserDefaults.standard.data(forKey: "saveFolderBookmark") {
+            var stale = false
+            if let dir = try? URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &stale),
+               dir.startAccessingSecurityScopedResource() {
+                return (dir, dir)
+            }
+        }
+        if let ubiquity = fm.url(forUbiquityContainerIdentifier: nil) {
+            return (ubiquity.appendingPathComponent("Documents", isDirectory: true), nil)
+        }
+        return (fm.urls(for: .documentDirectory, in: .userDomainMask)[0], nil)
+    }
+
+    // Split a kept .md into its YAML frontmatter (date / kept / words) and body.
+    private static func parseNote(_ text: String) -> (dateISO: String?, kept: String?, words: Int, body: String) {
+        var dateISO: String?, kept: String?, words: Int?
+        var body = text
+        if text.hasPrefix("---") {
+            let lines = text.components(separatedBy: "\n")
+            var end = -1
+            var i = 1
+            while i < lines.count {
+                let line = lines[i]
+                if line.trimmingCharacters(in: .whitespaces) == "---" { end = i; break }
+                if line.hasPrefix("date:") { dateISO = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces) }
+                else if line.hasPrefix("kept:") { kept = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces) }
+                else if line.hasPrefix("words:") { words = Int(String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces)) }
+                i += 1
+            }
+            if end >= 0 {
+                let rest = Array(lines[(end + 1)...]).drop(while: { $0.trimmingCharacters(in: .whitespaces).isEmpty })
+                body = rest.joined(separator: "\n")
+            }
+        }
+        body = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wc = words ?? body.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" }).count
+        return (dateISO, kept, wc, body)
+    }
+
+    // type-YYYY-MM-DD-HH-MM.md → "YYYY-MM-DD", a fallback when frontmatter is absent.
+    private static func isoFromFilename(_ name: String) -> String? {
+        let comps = name.replacingOccurrences(of: ".md", with: "").split(separator: "-")
+        if comps.count >= 4, comps[0] == "type" { return "\(comps[1])-\(comps[2])-\(comps[3])" }
+        return nil
+    }
+
+    static func list(completion: @escaping ([[String: Any]]) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let (dir, scoped) = keptDir() else { DispatchQueue.main.async { completion([]) }; return }
+            defer { scoped?.stopAccessingSecurityScopedResource() }
+            let fm = FileManager.default
+            let urls = (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+            var out: [[String: Any]] = []
+            for url in urls where url.pathExtension.lowercased() == "md" {
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                let p = parseNote(text)
+                var item: [String: Any] = ["filename": url.lastPathComponent, "body": p.body, "words": p.words]
+                if let iso = p.dateISO ?? isoFromFilename(url.lastPathComponent) { item["dateISO"] = iso }
+                if let kept = p.kept { item["kept"] = kept }
+                out.append(item)
+            }
+            // newest first by day, then by filename — filenames now carry the
+            // full HH-MM-SS, so two pages kept the same day still order by time.
+            out.sort {
+                let a = ($0["dateISO"] as? String ?? ""), b = ($1["dateISO"] as? String ?? "")
+                if a != b { return a > b }
+                return ($0["filename"] as? String ?? "") > ($1["filename"] as? String ?? "")
+            }
+            DispatchQueue.main.async { completion(out) }
+        }
+    }
+
+    static func read(filename: String, completion: @escaping (String) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard !filename.isEmpty, let (dir, scoped) = keptDir() else { DispatchQueue.main.async { completion("") }; return }
+            defer { scoped?.stopAccessingSecurityScopedResource() }
+            let text = (try? String(contentsOf: dir.appendingPathComponent(filename), encoding: .utf8)) ?? ""
+            let body = parseNote(text).body
+            DispatchQueue.main.async { completion(body) }
+        }
+    }
+
+    // burn = delete the file for good. The press-and-hold on the page is the
+    // confirmation; there is no trash, same as burning a page while writing.
+    static func delete(filename: String, completion: @escaping (Bool) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard !filename.isEmpty, let (dir, scoped) = keptDir() else { DispatchQueue.main.async { completion(false) }; return }
+            defer { scoped?.stopAccessingSecurityScopedResource() }
+            let ok = (try? FileManager.default.removeItem(at: dir.appendingPathComponent(filename))) != nil
+            DispatchQueue.main.async { completion(ok) }
+        }
+    }
+
+    // copy a kept page to a temp file so the share sheet has a stable .md URL
+    // that outlives the security-scoped access to the source folder.
+    static func tempCopy(filename: String) -> URL? {
+        guard !filename.isEmpty, let (dir, scoped) = keptDir() else { return nil }
+        defer { scoped?.stopAccessingSecurityScopedResource() }
+        guard let data = try? Data(contentsOf: dir.appendingPathComponent(filename)) else { return nil }
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        try? data.write(to: tmp, options: .atomic)
+        return tmp
+    }
 }

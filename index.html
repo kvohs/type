@@ -21,9 +21,16 @@
     --emboss: rgba(255,255,255,.8);
     --ember: #b05f4a;
     --accent: #df5a26;
+    --mark: #df5a26;            /* the kept-screen index tick + wordmark period */
     --line-h: 2.05em;
     --type-size: 18px;
     --line-px: calc(var(--type-size) * 2.05);   /* fixed row height so smaller lines still occupy one row */
+    /* line spacing: --space is the setting (1 / 1.5 / 2). The line BOX stays
+       tight (--leading) so the native caret is small no matter the spacing; the
+       airy rhythm comes from --gap added BETWEEN lines. JS sets --space on load. */
+    --space: 1.5;
+    --leading: 1.25;
+    --gap: max(0px, calc((var(--space) - var(--leading)) * var(--type-size)));
     --mono: "Courier Prime", "Courier New", ui-monospace, monospace;
   }
 
@@ -53,6 +60,7 @@
     --emboss: rgba(0,0,0,.45);
     --ember: #cf6d28;
     --accent: #d9883a;
+    --mark: #d9883a;
   }
   /* faint phosphor warmth, not a glow */
   body.amber .feed,
@@ -72,6 +80,7 @@
     --emboss: rgba(255,250,235,.6);
     --ember: #9c4a2c;
     --accent: #9c3a2a;         /* classified-stamp red */
+    --mark: #c5562a;           /* index tick reads a touch brighter than the stamp red */
     /* uneven aging that darkens toward the edges */
     background-image: radial-gradient(125% 100% at 50% 0%, rgba(0,0,0,0) 56%, rgba(74,56,28,.14) 100%);
   }
@@ -138,7 +147,7 @@
     width: min(64ch, 84vw);         /* caps at the measure on big screens; uses most of a small one */
     font-family: var(--mono);
     font-size: var(--type-size);
-    line-height: var(--line-px);
+    line-height: var(--space);
     color: var(--ink);
   }
   .feed-inner {
@@ -152,15 +161,55 @@
   /* a frozen copy of the welcome that fades in place while the quote types in fresh */
   .feed-inner.ghost { position: absolute; left: 0; right: 0; top: 0; transition: opacity .8s ease, transform .8s ease; pointer-events: none; }
 
+  /* committed lines carry no caret, so they get the FULL line spacing — every
+     row breathes, including wrapped ones. */
   .line {
-    min-height: var(--line-h);
+    min-height: calc(var(--type-size) * var(--space));
     white-space: pre-wrap;
-    /* overflow-wrap: break-word — only break mid-word as a last resort.
-       word-break: break-word (its more aggressive cousin) used to split
-       short words like "how" into "ho" / "w" when MAX_COLS was a hair
-       off vs the real container width. */
-    overflow-wrap: break-word;
+    /* never break inside a word — break-word was splitting "the" into "th"/"e"
+       and dangling a period onto its own line. Words wrap whole at spaces. */
+    overflow-wrap: normal;
+    word-break: normal;
   }
+  /* the LIVE line is the only one with a caret, so it keeps a tight line box →
+     the native caret stays small even when the page is airy. (Editable mode is
+     one flowing region, so it uses the full spacing and draws its own small
+     caret instead.) */
+  .line.active-line { line-height: var(--leading); min-height: calc(var(--type-size) * var(--leading)); }
+  body.editing .line.active-line { line-height: var(--space); min-height: calc(var(--type-size) * var(--space)); }
+  /* editable mode surface: a real native <textarea>, OUTSIDE the masked/transformed
+     platen, so caret / selection / copy-paste / scrolling are all native and stop
+     fighting iOS. plain monospace text at the airy --space rhythm; the platen above
+     stands down while it's active. */
+  .edit-surface {
+    position: absolute; top: 0; bottom: 104px;   /* END above the docked KEEP·BURN bar (~63px) so the active line / caret can never scroll behind it — the textarea simply doesn't extend down there */
+    left: 50%; transform: translateX(-50%);
+    width: min(64ch, 84vw);                  /* the same measure as .feed */
+    box-sizing: border-box;
+    padding: calc(var(--vvh, 100vh) * 0.30) 0 14px;   /* start ~⅓ down the visible area (tracks the keyboard), not jammed at the top */
+    margin: 0; border: 0; outline: none; resize: none; background: transparent;
+    font-family: var(--mono); font-size: var(--type-size); line-height: var(--space);
+    color: var(--ink); caret-color: var(--accent);   /* on-brand and visible in every theme */
+    white-space: pre-wrap; overflow-wrap: normal; word-break: normal;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    z-index: 4;                               /* above the platen, below the hints bar (10) */
+    -webkit-text-size-adjust: 100%;
+    /* fade text out at the top so it slips under the corner glyphs (share /
+       settings) instead of colliding with them — like the platen's veil in
+       writing mode. px stops clear the glyphs (~top safe-area + 48) in any
+       keyboard state. */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 114px, #000 158px);
+            mask-image: linear-gradient(to bottom, transparent 0, transparent 114px, #000 158px);
+  }
+  /* a clear, theme-aware selection highlight — the OS default washed out on the
+     dark themes. accent-tinted over the paper so it reads on light, dark, amber,
+     dispatch alike. (iOS editable selection also follows the webview tintColor,
+     set natively from the accent — see setShellTheme.) */
+  ::selection      { background: color-mix(in srgb, var(--accent) 55%, var(--paper)); color: var(--ink); }
+  ::-moz-selection { background: color-mix(in srgb, var(--accent) 55%, var(--paper)); color: var(--ink); }
+  body.edit-active .platen { visibility: hidden; }          /* the custom platen stands down */
+  body.edit-active #editCaret { display: none !important; } /* no hand-painted caret in native mode */
+  body.edit-active .quote-x, body.edit-active .quote-share { display: none !important; }
   .line.intro-line { white-space: nowrap; }
   .line.attrib { font-size: 12px; letter-spacing: .04em; color: var(--ink-quiet); }
   /* passive markdown: line-level only, never inline. Literal markers
@@ -230,6 +279,27 @@
   }
   @keyframes blink { 0%,49% { opacity: .9; } 50%,100% { opacity: 0; } }
   .stage.typing .caret { animation: none; opacity: .9; }
+
+  /* editable page: the native caret grows with the (airy) line-height, which
+     looks oversized. Hide it there and paint our own small bar instead — sized
+     to the type, not the line spacing. Locked mode keeps the native caret (it's
+     already small via the tight line box). */
+  body.editing .line.active-line { caret-color: transparent; }
+  #editCaret {
+    position: absolute; display: none; width: 2px; border-radius: 1px;
+    background: var(--ink); pointer-events: none; z-index: 6; will-change: top, left;
+    animation: blink 1060ms steps(1, end) infinite;
+  }
+  .stage.typing #editCaret { animation: none; opacity: .9; }
+
+  /* the active line is a REAL native contenteditable — iOS/macOS own the text,
+     caret, selection, autocorrect, dictation, undo. We never re-render it while
+     the user types; we only read its text into `current`. */
+  .line.active-line {
+    outline: none; border: 0; background: none;
+    caret-color: var(--ink); color: var(--ink);
+    -webkit-user-modify: read-write-plaintext-only;
+  }
 
   /* ---------- intro ---------- */
   .intro {
@@ -493,8 +563,11 @@
   }
   .setpick {
     flex: none; font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
-    color: var(--accent);
+    color: var(--accent); cursor: pointer;
   }
+  /* the folder name as a click-to-open-in-Finder link */
+  .setval.setlink { cursor: pointer; text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; }
+  .setval.setlink:hover { color: var(--accent); text-decoration-color: var(--accent); }
   /* Segmented picker — used in a full-width setrow for mutually-exclusive
      choices like the theme. Reads like a list of options ("light · dark ·
      amber · dispatch") with the active one in accent. Replaces 3 toggle rows. */
@@ -502,13 +575,13 @@
   .seg {
     display: inline-flex; align-items: center; justify-content: center;
     flex-wrap: nowrap; gap: 0;
-    font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+    font-family: var(--mono); font-size: 12px; letter-spacing: .06em;
     text-transform: uppercase;
   }
   .seg-opt {
-    appearance: none; background: none; border: 0; padding: 4px 5px;
+    appearance: none; background: none; border: 0; padding: 4px 6px;
     font: inherit; letter-spacing: inherit; text-transform: inherit;
-    color: var(--ink-quiet); cursor: pointer; border-radius: 4px;
+    color: var(--ink-soft); cursor: pointer; border-radius: 4px;
     transition: color .15s ease;
   }
   .seg-opt:hover { color: var(--ink-soft); }
@@ -624,24 +697,141 @@
   /* once the keyboard is up the wordmark's job is done — it bows out
      (opacity, not display: keep & burn hold their edges) */
   body.ios.kb-up .type-mark-hint { opacity: 0; }
-  body.ios #hintBurn .l { color: color-mix(in srgb, var(--ember) 60%, var(--ink-faint)); }
-  body.ios .settings {
-    top: calc(var(--vvt, 0px) + var(--vvh, 100vh) / 2);
-    right: 16px;
-    max-height: calc(var(--vvh, 100vh) - 24px);
+  /* the bottom-center pull-up bar — lift the kept drawer (replaces the wordmark
+     in steady state; the brand now lives only in the intro). Fades while typing. */
+  body.ios .kept-pull { pointer-events: auto; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    padding: 10px 26px; -webkit-tap-highlight-color: transparent; transition: opacity .3s ease; }
+  body.ios .kept-pull .pull-bar { width: 40px; height: 5px; border-radius: 3px; background: var(--ink-faint); opacity: .7; transition: opacity .15s ease; }
+  body.ios .kept-pull:active .pull-bar { opacity: 1; }
+  /* while typing, the same KEEP · ▬ · BURN bar docks just above the keyboard
+     (iOS's own ‹ ∨ ✓ bar is suppressed natively). kept = tap ▬ or swipe up;
+     dismiss the keyboard = swipe down on the paper. */
+  body.ios.kb-up .hints {
+    top: auto;
+    bottom: calc(100vh - (var(--vvt, 0px) + var(--vvh, 100vh)));   /* flush on the keyboard */
+    padding: 34px 13vw 14px;                                       /* feather room above; keep KEEP·BURN inset off the edges (matches steady state) */
+    /* solid paper base so the writing line doesn't bleed through KEEP · ▬ · BURN,
+       feathered at the top so text scrolling under it fades out gently */
+    background: linear-gradient(to top, var(--paper) 0%, var(--paper) 56%, transparent 100%);
+    pointer-events: none;                                          /* the feather never eats a tap */
   }
+  body.ios.kb-up .hints > * { pointer-events: auto; }              /* but the buttons still catch theirs */
+  body.ios.kb-up .kept-pull { opacity: 1; }
+  /* the bar stays put while typing — it's quiet enough; don't fade it out */
+  body.ios.kb-up .hints.dim { opacity: 1; }   /* stays visible while typing; taps handled per-button above */
+  /* keyboard up: drop the strike point low so the opener quote and your
+     committed lines keep the room above. Centering wasted the bottom half of
+     the visible area and shoved longer quotes off the top edge; writing nearer
+     the keyboard lets the page fill upward and stay readable. The transition
+     softens the shift when the keyboard appears. */
+  body.ios .feed { transition: top .28s cubic-bezier(.22,.61,.25,1); }
+  body.ios.kb-up .feed { top: calc(76% - 1.02em); }
+  body.ios #hintBurn .l { color: color-mix(in srgb, var(--ember) 60%, var(--ink-faint)); }
+  /* iOS: settings is a full-height rail that sits UNDER the paper on the right.
+     Opening it slides the paper to the LEFT to expose the rail beneath — like
+     Dispatch. The rail is stationary; the page is what moves. */
+  body.ios { --rail: min(50vw, 280px); }   /* slim rail → half the paper stays visible */
+  body.ios .settings {
+    top: var(--vvt, 0px); bottom: auto; left: auto; right: 0;
+    transform: none; animation: none;
+    width: var(--rail); height: var(--vvh, 100vh); max-height: none;
+    border: 0; border-radius: 0;      /* no hard seam — the paper's shadow does it */
+    padding: calc(env(safe-area-inset-top, 0px) + 28px) 16px calc(env(safe-area-inset-bottom, 0px) + 28px);
+    overflow-y: auto;
+    z-index: 1;                       /* underneath the paper */
+  }
+  /* the spacing picker (3 short words) tightens to fit one line in the slim rail */
+  body.ios .seg { font-size: 11px; letter-spacing: .02em; }
+  body.ios .seg-opt { padding: 4px 3px; }
+  body.ios .seg-opt + .seg-opt::before { margin: 0 1px 0 -2px; }
+  /* the 4 themes won't fit one line in a 50% rail, so lay them out as a 2×2 grid —
+     spaced out and roomier than the old cramped single row */
+  body.ios #themePick {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 6px;
+    width: 100%; font-size: 12px;
+  }
+  body.ios #themePick .seg-opt { padding: 6px 4px; }
+  body.ios #themePick .seg-opt + .seg-opt::before { content: none; }   /* no dots in the grid */
+  /* the paper (the writing stage) rides above the rail and slides left to reveal it */
+  body.ios #stage {
+    background: var(--paper);         /* opaque, so the rail stays hidden until revealed */
+    z-index: 2;
+    transition: transform .32s cubic-bezier(.22,.61,.25,1), border-radius .32s ease;
+    /* the paper rides ABOVE the recessed rail and owns the seam, Dispatch-style:
+       a bright lit leading edge + a soft shadow cast right into the rail. Only the
+       right edge shows (off-screen until the paper slides left). */
+    box-shadow:
+      inset -1px 0 0 rgba(255,255,255,0.07),
+      18px 0 40px -22px rgba(0,0,0,0.55);
+  }
+  /* opening rolls the paper back: it slides left and its leading corners curve,
+     so it reads like a lifted sheet over the rail */
+  body.ios.settings-open #stage {
+    transform: translateX(calc(-1 * var(--rail)));
+    border-radius: 0 26px 26px 0;     /* a clear rolled-back curve on the leading corners */
+  }
+  /* the chrome bows out while the rail is open */
+  body.ios.settings-open .hints,
+  body.ios.settings-open .prose-share,
+  body.ios.settings-open .hint.ios-settings { opacity: 0; pointer-events: none; }
+  /* dim the paper sliver; tap it (or swipe right) to slide back. lives inside the
+     stage so it travels with the paper and never covers the revealed rail. */
+  .page-dim { position: absolute; inset: 0; z-index: 40; background: rgba(0,0,0,0); pointer-events: none; transition: background .32s ease; }
+  body.ios.settings-open .page-dim { background: rgba(0,0,0,0); pointer-events: auto; }   /* no grey wash — page shows its true color; the shadow alone says "on top". (still catches taps to close) */
+  /* desktop keeps the centered card + a simple scrim behind it */
+  .settings-scrim {
+    position: fixed; inset: 0; z-index: 11;
+    background: rgba(0,0,0,0); pointer-events: none;
+    transition: background .28s ease;
+  }
+  body.settings-open:not(.ios) .settings-scrim { background: rgba(0,0,0,.42); pointer-events: auto; }
+  body.ios .settings-scrim { display: none; }   /* iOS uses the in-stage page-dim instead */
   /* settings lives at the top corner on the phone — a quiet gear glyph,
      keep & burn alone at the bottom. 40px box = a real thumb target. */
   body.ios .hint.ios-settings {
-    position: fixed; z-index: 11;
+    position: fixed; z-index: 13;          /* above the settings panel (12) so it stays visible + toggles it closed */
     top: calc(8px + env(safe-area-inset-top, 0px));
     right: 12px;
     width: 40px; height: 40px;
     display: inline-flex; align-items: center; justify-content: center;
-    color: var(--ink-faint);
+    color: var(--ink-quiet);          /* faint was invisible on dark paper */
+    opacity: .9;
     -webkit-tap-highlight-color: transparent;
   }
-  body.ios .hint.ios-settings:active { color: var(--ink-quiet); }
+  body.ios .hint.ios-settings:active { color: var(--ink); }
+  /* share glyph — top-left mirror of settings; only once there's prose to share */
+  .prose-share {
+    position: fixed; z-index: 13;
+    top: 14px; right: 16px;                 /* desktop: top-right (free corner; traffic lights are top-left) */
+    width: 40px; height: 40px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ink-quiet); opacity: 0; pointer-events: none; cursor: pointer;
+    transition: opacity .35s ease; -webkit-tap-highlight-color: transparent;
+    -webkit-app-region: no-drag;            /* stays clickable over the desktop drag region */
+  }
+  body.ios .prose-share {                   /* iOS: top-left (settings hamburger is top-right) */
+    top: calc(8px + env(safe-area-inset-top, 0px)); left: 12px; right: auto;
+  }
+  body.has-prose .prose-share { opacity: .9; pointer-events: auto; }
+  .prose-share:hover, .prose-share:active { color: var(--ink); }
+  body.reviewing .prose-share, body.feedback .prose-share { opacity: 0 !important; pointer-events: none; }
+  /* clean screen while typing — the corner glyphs (share / settings) fade out and
+     come back the moment you pause */
+  body.ios .hint.ios-settings { transition: opacity .35s ease, color .15s ease; }
+  body.typing .prose-share, body.typing .hint.ios-settings { opacity: 0 !important; pointer-events: none; }
+  /* the visible way in: a quiet "kept" in the top-left, mirroring settings
+     top-right. Bows out while the keyboard's up so writing stays clean. */
+  body.ios .ios-kept-entry {
+    position: fixed; z-index: 11;
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    left: 16px;
+    display: inline-flex; align-items: center;
+    font-family: var(--mono); font-weight: 700; font-size: 11px; letter-spacing: .24em; text-transform: uppercase;
+    color: var(--ink-faint); padding: 14px 8px; margin: 0; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; transition: opacity .3s ease;
+  }
+  body.ios .ios-kept-entry:active { color: var(--ink-quiet); }
+  body.ios.kb-up .ios-kept-entry { opacity: 0; pointer-events: none; }
   body.ios .feedback-label, body.ios .feedback-paused { top: calc(14px + env(safe-area-inset-top, 0px)); }
   body.ios .smolder-warn { top: calc(36px + env(safe-area-inset-top, 0px)); }
   body.ios .update { top: calc(12px + env(safe-area-inset-top, 0px)); }
@@ -660,6 +850,159 @@
     z-index: 5;
     font-size: 16px;                                /* ≥16px stops the focus zoom */
   }
+
+  /* ===================== KEPT NOTES (review) =====================
+     A second screen that rolls up over the writing sheet: your kept pages on
+     a 3D roll, a red index line at the bottom to scrub, tap a page to read it.
+     Ported faithfully from the design handoff; reuses the app's theme tokens. */
+  /* kept is a pull-up drawer over the writing page. The page stays put and
+     peeks above the drawer's top edge, so you always see it's still there;
+     pull the drawer down (handle, swipe, or tap the peek) to return to it. */
+  .kept-screen {
+    position: fixed; left: 0; right: 0; bottom: 0; top: calc(env(safe-area-inset-top, 0px) + 30px);
+    z-index: 40; background: var(--paper); color: var(--ink);
+    border-radius: 22px 22px 0 0; box-shadow: 0 -16px 44px -12px rgba(0,0,0,.34);
+    overflow: hidden; touch-action: none;
+    user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+    transform: translateY(100%); pointer-events: none;
+    transition: transform .5s cubic-bezier(.2,.7,.3,1);
+  }
+  body.reviewing .kept-screen { transform: translateY(0); pointer-events: auto; }
+  /* the page behind dims a touch so the drawer reads as lifted off it */
+  .kept-scrim { position: fixed; inset: 0; z-index: 39; background: rgba(0,0,0,0); pointer-events: none; transition: background .45s ease; }
+  body.reviewing .kept-scrim { background: rgba(0,0,0,.28); pointer-events: auto; }
+  /* the writing-screen corner controls bow out while the drawer is up */
+  body.reviewing .ios-kept-entry, body.reviewing .hint.ios-settings { opacity: 0; pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .kept-screen { transition: transform .25s ease; }
+  }
+
+  .kept-head { position: absolute; top: 26px; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: flex-end; padding: 0 16px; z-index: 12; }
+  /* grab handle at the drawer's top edge — pull it down (or tap) to go home */
+  .kept-grab { position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
+    z-index: 13; width: 72px; height: 26px; padding: 0; border: 0; background: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+  .kept-grab::before { content: ""; width: 44px; height: 5px; border-radius: 3px; background: var(--ink-faint); opacity: .6; transition: opacity .15s ease; }
+  .kept-grab:active::before { opacity: 1; }
+  /* top-left "type." — the way back to the page (mirrors "kept" on the writing screen) */
+  .kept-mark { appearance: none; background: none; border: 0; font-family: var(--mono); font-weight: 700;
+    font-size: 16px; letter-spacing: .01em; color: var(--ink-soft);
+    cursor: pointer; padding: 12px 8px; margin: -12px -8px; -webkit-tap-highlight-color: transparent; }
+  .kept-mark .period { color: var(--mark); }
+  .kept-mark:hover, .kept-mark:active { color: var(--ink); }
+  .kept-actions { display: flex; align-items: center; gap: 4px; }
+  .kept-icon { appearance: none; background: none; border: 0; color: var(--ink-faint); cursor: pointer; padding: 8px; display: flex; }
+  .kept-icon:hover { color: var(--ink-quiet); }
+
+  .kept-search { position: absolute; top: 58px; left: 20px; right: 20px; z-index: 45; display: flex; align-items: center; gap: 10px;
+    padding: 6px 2px 8px; border-bottom: 1px solid var(--ink-faint); background: var(--paper); }
+  .kept-search[hidden] { display: none; }   /* class display:flex would otherwise beat [hidden] */
+  .ks-glass { color: var(--ink-quiet); flex: none; }
+  .ks-input { flex: 1; min-width: 0; appearance: none; background: none; border: 0; outline: none; font-family: var(--mono); font-size: 16px; color: var(--ink); }
+  .ks-input::placeholder { color: var(--ink-faint); }
+  .ks-count { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--ink-quiet); }
+  .ks-close { appearance: none; background: none; border: 0; font-family: var(--mono); font-size: 18px; line-height: 1; color: var(--ink-faint); cursor: pointer; padding: 2px 4px; }
+
+  .roll-wrap { position: absolute; inset: 0; }
+  .roll-stage { position: absolute; top: 84px; bottom: calc(env(safe-area-inset-bottom, 0px) + 70px); left: 0; right: 0; perspective: 1500px; cursor: grab; touch-action: none; }
+  .roll-stage:active { cursor: grabbing; }
+  .roll-plane { position: absolute; inset: 0; transform-style: preserve-3d; }
+  .page {
+    position: absolute; left: 50%; top: 50%; width: min(318px, 82vw); height: 84%;
+    display: flex; flex-direction: column;
+    background: var(--panel); border-radius: 4px; padding: 28px 26px 24px;
+    border: 1px solid color-mix(in srgb, var(--rule) 75%, transparent);
+    box-shadow: 0 8px 22px -6px rgba(0,0,0,.18), inset 0 1px 0 var(--emboss);
+    backface-visibility: hidden; will-change: transform, opacity; cursor: pointer; overflow: hidden;
+  }
+  .page.is-focus { box-shadow: 0 22px 50px -16px var(--panel-shadow), inset 0 1px 0 var(--emboss); }
+  .page-stamp { flex: none; font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: .26em; text-indent: .26em; color: var(--ink); text-shadow: var(--ribbon, none); }
+  .page-rule { flex: none; margin-top: 13px; height: 1px; width: 30px; background: var(--ink-faint); }
+  .page-body { margin-top: 20px; flex: 1; min-height: 0; overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, #000 82%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 82%, transparent 100%); }
+  .page-body p { font-family: var(--mono); font-size: 13.5px; line-height: 1.82; margin: 0 0 14px; color: var(--ink); text-wrap: pretty; text-shadow: var(--ribbon, none); }
+  .page-meta { margin-top: 18px; font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+
+  /* hold-to-burn ember (wired in a later pass) */
+  .ember-hold { position: absolute; inset: 0; border-radius: 4px; pointer-events: none; opacity: 0;
+    background: radial-gradient(120% 75% at 50% 100%, rgba(255,110,30,.55), transparent 72%); }
+  .ember-sweep { position: absolute; inset: 0; pointer-events: none; opacity: 0; border-radius: 4px; }
+  .spark-host { position: absolute; inset: 0; pointer-events: none; }
+  .page.burning { animation: pagefade 1.35s ease forwards; }
+  @keyframes pagefade { 0%,52%{ opacity: 1; } 100%{ opacity: 0; } }
+  .page.burning .page-body p, .page.burning .page-stamp { animation: chartext 1.1s ease forwards; }
+  @keyframes chartext { 0%{ color: var(--ink); } 34%{ color: #c4602f; text-shadow: 0 0 8px rgba(196,96,47,.6); } 100%{ color: #2a1a12; text-shadow: none; } }
+  .page.burning .ember-sweep { animation: emberglow 1.2s ease forwards; }
+  @keyframes emberglow { 0%{ opacity: 0; } 22%{ opacity: 1; background: linear-gradient(0deg, rgba(255,110,30,.5), transparent 70%); } 100%{ opacity: 0; } }
+  .spark { position: absolute; bottom: 30%; width: 3px; height: 3px; border-radius: 50%; background: #ff8a3a; box-shadow: 0 0 6px 1px rgba(255,140,40,.85); animation: sparkrise 1.2s ease-out forwards; }
+  @keyframes sparkrise { 0%{ transform: translate(0,0); opacity: 0; } 12%{ opacity: 1; } 100%{ transform: translate(var(--drift), var(--rise)); opacity: 0; } }
+
+  /* the bottom red index line: position + scrubber + thumb rest */
+  .bottom-line { position: absolute; left: 28%; right: 28%; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); height: 40px; z-index: 14; cursor: grab; touch-action: none; }
+  .bottom-line:active { cursor: grabbing; }
+  .bl-track { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--ink-faint); opacity: .5; }
+  .bl-mark { position: absolute; left: 4%; top: 50%; transform: translate(-50%,-50%); width: 2px; height: 13px; border-radius: 1px; background: var(--mark); box-shadow: 0 0 4px var(--mark); }
+  .bl-date { position: absolute; left: 4%; top: 2px; transform: translate(-50%,-100%); white-space: nowrap;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .2em; text-indent: .2em; text-transform: uppercase;
+    color: var(--ink-quiet); opacity: .4; pointer-events: none; transition: opacity .2s ease; }
+  .bl-date.fast { font-size: 13px; letter-spacing: .12em; color: var(--ink-soft); }
+
+  /* opened: tap a page to read it full */
+  .opened { position: absolute; inset: 0; z-index: 80; background: var(--paper); display: flex; flex-direction: column;
+    animation: openIn .26s cubic-bezier(.2,.7,.3,1); }
+  .opened.closing { animation: openOut .22s ease forwards; }
+  @keyframes openIn { from { opacity: 0; transform: scale(.95); } to { opacity: 1; transform: none; } }
+  @keyframes openOut { to { opacity: 0; transform: scale(.97); } }
+  @keyframes opSlide { from { opacity: 0; transform: translateX(var(--ox, 0)); } to { opacity: 1; transform: none; } }
+  /* the drawer already clears the status bar, so this sheet only needs a small
+     top breath — no second safe-area inset (that was the big gap up top). */
+  .opened-sheet { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; padding: 12px 30px 6px; }
+  .opened-grab { flex: none; width: 36px; height: 4px; border-radius: 2px; background: var(--ink-faint); opacity: .5; margin: 0 auto 12px; }
+  .opened-scroll { flex: 1; min-height: 0; overflow: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .opened-scroll::-webkit-scrollbar { display: none; }   /* no chrome — just scroll */
+  .opened-body { margin-top: 18px; }
+  .opened-body p { font-family: var(--mono); font-size: 15px; line-height: 2.0; margin: 0 0 18px; color: var(--ink); text-wrap: pretty; text-shadow: var(--ribbon, none); }
+  /* a clear, labelled footer instead of a lone chevron: back to the sheets,
+     share — burn joins it in the burn pass */
+  .opened-foot { flex: none; display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 8px 0 calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .of-btn { appearance: none; background: none; border: 0; font-family: var(--mono); font-size: 12px; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--ink-quiet); cursor: pointer; padding: 12px 16px; -webkit-tap-highlight-color: transparent; }
+  .of-btn:active { color: var(--ink); }
+  .of-sep { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-faint); opacity: .6; }
+  /* burn lives in the footer too — press and hold to confirm (no trash) */
+  .of-btn.burn { position: relative; color: color-mix(in srgb, var(--ember) 72%, var(--ink-quiet)); }
+  .of-fill { position: absolute; left: 16px; right: 16px; bottom: 7px; height: 2px; background: var(--ember);
+    transform-origin: left center; transform: scaleX(0); opacity: 0; box-shadow: 0 0 6px var(--ember); pointer-events: none; }
+  .of-btn.burn.arming .of-fill { opacity: .95; }
+  .opened-ember { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+  .opened.burning-open .opened-ember { animation: emberglow 1.2s ease forwards; }
+  .opened.burning-open .opened-sheet { animation: pagefade 1.35s ease forwards; }
+  .opened.burning-open .opened-body p, .opened.burning-open .page-stamp { animation: chartext 1.1s ease forwards; }
+
+  /* long-press a focused card → a small context menu (read · share · burn) */
+  .card-menu-scrim { position: absolute; inset: 0; z-index: 60; background: rgba(0,0,0,.18); }
+  .card-menu { position: absolute; left: 50%; top: 44%; transform: translate(-50%,-50%); z-index: 61; min-width: 190px;
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 24px 56px -14px var(--panel-shadow); animation: cmpop .18s ease; }
+  @keyframes cmpop { from { opacity: 0; transform: translate(-50%,-46%) scale(.96); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+  .cm-btn { display: block; width: 100%; appearance: none; background: none; border: 0; border-top: 1px solid var(--rule);
+    font-family: var(--mono); font-size: 15px; letter-spacing: .03em; color: var(--ink); padding: 16px 20px; cursor: pointer;
+    text-align: left; -webkit-tap-highlight-color: transparent; }
+  .cm-btn:first-child { border-top: 0; }
+  .cm-btn:active { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  .cm-btn.burn { color: color-mix(in srgb, var(--ember) 74%, var(--ink-quiet)); }
+
+  /* empty / first run */
+  .empty-page { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(318px,82vw); height: 88%;
+    background: var(--panel); border-radius: 4px; border: 1px solid color-mix(in srgb, var(--rule) 75%, transparent);
+    box-shadow: 0 14px 34px -16px var(--panel-shadow), inset 0 1px 0 var(--emboss); }
+  .empty-line { position: absolute; top: 42%; left: 0; right: 0; transform: translateY(-50%); text-align: center; padding: 0 40px;
+    font-family: var(--mono); font-style: italic; font-size: 14px; line-height: 2; color: var(--ink-quiet); }
+  .empty-line span { color: var(--ink-faint); }
+
 </style>
 </head>
 <body>
@@ -668,6 +1011,10 @@
     <div class="platen">
       <div class="feed"><div class="feed-inner" id="feed"></div></div>
     </div>
+    <!-- editable mode: a real native text box. native caret / selection / copy-paste /
+         scrolling, so it stops fighting iOS. holds the whole note as plain text; the
+         platen above is hidden while it's active. -->
+    <textarea class="edit-surface" id="editSurface" hidden autocorrect="on" autocapitalize="sentences" autocomplete="off" spellcheck="false"></textarea>
     <div class="intro" id="intro"></div>
     <div class="stamp" id="stamp"><div class="date" id="stampDate"></div><div class="kept" id="stampKept"></div></div>
     <div class="smolder-veil" id="smolderVeil"></div>
@@ -676,6 +1023,7 @@
     <div class="feedback-paused" id="feedbackPaused" aria-hidden="true">page paused. back when you're done.</div>
     <div class="quote-share" id="quoteShare" title="share as wallpaper" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2"/><path d="M5 5L8 2L11 5"/><path d="M3.5 8V13C3.5 13.5523 3.94772 14 4.5 14H11.5C12.0523 14 12.5 13.5523 12.5 13V8"/></svg></div>
     <div class="quote-x" id="quoteX" title="remove the quote" aria-hidden="true">&#215;</div>
+    <div class="page-dim" id="pageDim" aria-hidden="true"></div>
   </div>
 
   <div class="hints dim" id="hints">
@@ -695,6 +1043,7 @@
 
   <div class="update" id="update" aria-live="polite"><div class="update-bar"><i></i></div><div class="update-text"></div></div>
 
+  <div class="settings-scrim" id="settingsScrim" aria-hidden="true"></div>
   <div class="settings" id="settings" hidden>
     <div class="settings-title">settings</div>
     <div class="setstats" id="setStats" aria-hidden="true"><span id="setStatsWords"></span><span id="setStatsPages"></span><span id="setStatsTime"></span></div>
@@ -706,10 +1055,17 @@
         <button type="button" class="seg-opt" data-theme="dispatch">dispatch</button>
       </span>
     </div>
+    <div class="setrow setrow-seg">
+      <span class="seg" id="spacePick" role="radiogroup" aria-label="Line spacing">
+        <button type="button" class="seg-opt" data-space="1">tight</button>
+        <button type="button" class="seg-opt" data-space="1.5">normal</button>
+        <button type="button" class="seg-opt" data-space="2">air</button>
+      </span>
+    </div>
     <div class="setdiv"></div>
     <label class="setrow"><span>Zen mode <span class="info" tabindex="0">i<span class="tip">Goes fullscreen. Just you and the page. ⌘⇧F to toggle, Esc to exit.</span></span></span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
     <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top <span class="info" tabindex="0">i<span class="tip">Keeps the type window above all others. Good for jotting while reading something else.</span></span></span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
-    <label class="setrow" id="rowEditable"><span>Editable page <span class="info" tabindex="0">i<span class="tip">Unlocks the page — the arrow keys move the cursor back through what you've written, and you can edit it. Set it before you start: it locks in once you've typed.</span></span></span><input type="checkbox" id="setEditable" /><span class="sw"></span></label>
+    <label class="setrow" id="rowEditable"><span>Editable page <span class="info" tabindex="0">i<span class="tip">Off, it's a typewriter: a finished line is locked. On, the page is editable — tap or arrow anywhere in what you've written and fix it. Set it before you start; it locks in once you've typed.</span></span></span><input type="checkbox" id="setEditable" /><span class="sw"></span></label>
     <label class="setrow"><span>Burn if I stop</span><span class="setpick burnsecs" id="burnAfterVal" hidden>10s</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
     <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
     <label class="setrow"><span>Pages</span><input type="checkbox" id="setPages" /><span class="sw"></span></label>
@@ -737,11 +1093,35 @@
 
   <div class="float-tip" id="floatTip" role="tooltip" aria-hidden="true"></div>
 
+  <!-- Kept notes: a pull-up drawer over the writing page. -->
+  <div class="kept-scrim" id="keptScrim" aria-hidden="true"></div>
+  <div class="kept-screen" id="keptScreen" aria-hidden="true">
+    <button class="kept-grab" id="keptGrab" type="button" aria-label="back to writing"></button>
+    <div class="kept-head">
+      <div class="kept-actions">
+        <button class="kept-icon" id="keptSearchBtn" type="button" aria-label="search">
+          <svg viewBox="0 0 18 18" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="5.2"/><path d="M11.8 11.8l4 4"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="kept-search" id="keptSearch" hidden>
+      <svg class="ks-glass" viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="5.2"/><path d="M11.8 11.8l4 4"/></svg>
+      <input class="ks-input" id="keptSearchInput" type="text" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="search what you've kept" />
+      <span class="ks-count" id="keptSearchCount"></span>
+      <button class="ks-close" id="keptSearchClose" type="button" aria-label="close search">&#215;</button>
+    </div>
+    <div class="roll-wrap" id="rollWrap">
+      <div class="roll-stage" id="rollStage"><div class="roll-plane" id="rollPlane"></div></div>
+      <div class="bottom-line" id="bottomLine"><div class="bl-track"></div><div class="bl-date" id="blDate"></div><div class="bl-mark" id="blMark"></div></div>
+    </div>
+  </div>
+
 <script src="quotes.js"></script>
 <script>
 (() => {
   const feed    = document.getElementById('feed');
   const stage   = document.getElementById('stage');
+  const editSurface = document.getElementById('editSurface');
   const introEl = document.getElementById('intro');
   const hints   = document.getElementById('hints');
   const stampEl = document.getElementById('stamp');
@@ -830,7 +1210,7 @@
   })();
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, haptics: true, quoteOpen: true, quoteBurn: true, saveDir: '' };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, haptics: true, quoteOpen: true, quoteBurn: true, saveDir: '', lineSpace: 1.5 };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -852,8 +1232,90 @@
       if (k === 'smolder') { if (settings.smolder) scheduleSmolder(); else coolSmolder(); updateBurnAfter(); }
       if (k === 'wordCount' || k === 'pages' || k === 'timer') updateMeter();
       if (k === 'sound') applySoundDetails();
+      if (k === 'editable') { applyEditable(); syncEditableSurface(); positionEditCaret(); }
     });
   });
+  // editable page is one flowing region, so its spacing must live in the line
+  // box (no separate lines to gap between). body.editing flips the CSS to do that.
+  const applyEditable = () => { document.body.classList.toggle('editing', !!settings.editable); };
+  applyEditable();
+
+  // ---- editable mode: a real native <textarea> surface ----
+  // Editable mode is chosen before a sheet starts. While it's on and we're
+  // writing, the whole note lives in this native text box — native caret,
+  // selection, copy/paste and SCROLLING, so it stops fighting iOS (the custom
+  // span-rendered platen, the transform roll, and the hand-painted caret all
+  // stand down). The note text round-trips through `current`/`locked` exactly as
+  // the rest of the app already expects, so keep / share / meter / draft are
+  // unchanged. Locked/writing mode never touches any of this.
+  function editActive() { return document.body.classList.contains('edit-active'); }
+  function editableNow() {
+    return !!settings.editable && phase === 'writing' && !quotePlaying && !frozen && !feedbackMode;
+  }
+  function openEditable() {
+    if (!editSurface || editActive()) return;
+    const all = [...locked, current].join('\n');     // fold the whole note into one plain string
+    locked = []; userFloor = 0; current = all;        // during editing the note lives in `current`
+    editSurface.value = all;
+    editSurface.hidden = false;
+    document.body.classList.add('edit-active');
+    requestAnimationFrame(() => {
+      try { editSurface.focus({ preventScroll: true }); } catch (e) { editSurface.focus(); }
+      const n = editSurface.value.length;
+      try { editSurface.setSelectionRange(n, n); } catch (e) {}
+      editSurface.scrollTop = editSurface.scrollHeight;
+    });
+  }
+  // read the textarea back into the model WITHOUT leaving editable (used on every input)
+  function syncFromEditable() {
+    if (!editActive()) return;
+    current = editSurface.value; locked = []; userFloor = 0;
+  }
+  // leave the native surface and rebuild the custom platen from the text, so the
+  // keep eject / burn animations (which run on the platen) have real lines to act
+  // on. Splits the note back into committed lines + the active line.
+  function exitEditableToPlaten() {
+    if (!editActive()) return;
+    const lines = (editSurface.value || '').split('\n');
+    current = lines.pop() ?? '';
+    locked = lines; userFloor = 0;
+    editSurface.hidden = true;
+    document.body.classList.remove('edit-active');
+    rebuildFeedFromModel();
+  }
+  function rebuildFeedFromModel() {
+    feed.querySelectorAll('.line:not(.active-line)').forEach((el) => el.remove());
+    renderActive();
+    for (const ln of locked) {
+      const el = document.createElement('div');
+      el.className = 'line';
+      renderInto(el, ln, false);
+      feed.insertBefore(el, activeEl);
+      applyMdClass(el, ln);
+    }
+    renderActive();
+    layout();
+  }
+  // open or close the surface to match the current mode + phase
+  function syncEditableSurface() {
+    if (editableNow()) openEditable();
+    else if (editActive()) exitEditableToPlaten();
+  }
+  if (editSurface) {
+    // desktop: enable spellcheck so macOS native autocorrect engages (iOS uses the
+    // autocorrect attribute and keeps spellcheck off — no squiggles)
+    if (window.typeAPI && window.typeAPI.isDesktop) editSurface.setAttribute('spellcheck', 'true');
+    editSurface.addEventListener('input', (e) => {
+      if (!editActive()) return;
+      syncFromEditable();
+      // typing sound + haptics — the native surface bypasses the live-line path
+      // (bindActive) where these used to fire, so play them here per keystroke
+      const it = (e && e.inputType) || 'insertText';
+      if (it.startsWith('insert')) { unlockAudio(); thock(); if (typeHaptic) typeHaptic('key'); }
+      else if (it.startsWith('delete')) { if (typeHaptic) typeHaptic('key'); }
+      markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
+    });
+  }
   // Theme picker — mutually exclusive across THEMES booleans + "light" (none on)
   const themePick = document.getElementById('themePick');
   const syncThemePick = () => {
@@ -873,13 +1335,40 @@
   });
   syncThemePick();
   applyTheme();
+  // Line spacing — uniform line-height; 1.1 tight / 1.5 medium / 2 wide
+  const spacePick = document.getElementById('spacePick');
+  const applyLineSpace = () => { document.documentElement.style.setProperty('--space', String(settings.lineSpace || 1.5)); };
+  const syncSpacePick = () => {
+    spacePick.querySelectorAll('.seg-opt').forEach(b => {
+      b.setAttribute('aria-pressed', String(parseFloat(b.dataset.space) === (settings.lineSpace || 1.5)));
+    });
+  };
+  spacePick.addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg-opt');
+    if (!btn) return;
+    settings.lineSpace = parseFloat(btn.dataset.space);
+    saveSettings();
+    applyLineSpace();
+    syncSpacePick();
+    if (typeof layout === 'function') layout();   // re-roll the platen for the new row pitch
+    if (typeof positionEditCaret === 'function') positionEditCaret();
+  });
+  syncSpacePick();
+  applyLineSpace();
   // Sound has 3 sub-toggles (clicks / carriage / bell) that only matter when
   // sound is on — keep them tucked away otherwise to keep the panel short.
   const soundDetails = document.getElementById('soundDetails');
   const applySoundDetails = () => { soundDetails.hidden = !settings.sound; };
   applySoundDetails();
-  const toggleSettings = () => { settingsEl.hidden = !settingsEl.hidden; if (!settingsEl.hidden) hints.classList.remove('dim'); };
+  const toggleSettings = () => {
+    settingsEl.hidden = !settingsEl.hidden;
+    if (!settingsEl.hidden) { hints.classList.remove('dim'); if (activeEl) activeEl.blur(); if (editSurface) editSurface.blur(); }
+  };
   hintSettings.addEventListener('click', toggleSettings);
+  // body.settings-open drives the dim scrim behind the rail; observing the hidden
+  // attribute catches EVERY open/close path (hamburger, edge-swipe, esc, outside-tap)
+  new MutationObserver(() => document.body.classList.toggle('settings-open', !settingsEl.hidden))
+    .observe(settingsEl, { attributes: true, attributeFilter: ['hidden'] });
   document.addEventListener('mousedown', (e) => {
     if (!settingsEl.hidden && !settingsEl.contains(e.target) && !hintSettings.contains(e.target)) settingsEl.hidden = true;
   });
@@ -903,6 +1392,15 @@
     infoEl.addEventListener('mouseleave', hide);
     infoEl.addEventListener('focus', show);
     infoEl.addEventListener('blur', hide);
+    // touch: the info mark sits inside the row's <label>, so a tap would also
+    // flip the switch. Swallow that — a tap on (i) only shows the tip (and
+    // toggles it off / auto-hides), it never toggles the setting.
+    let tipTimer = null;
+    infoEl.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (floatTip.classList.contains('show')) { hide(); clearTimeout(tipTimer); }
+      else { show(); clearTimeout(tipTimer); tipTimer = setTimeout(hide, 4500); }
+    });
   });
 
   // save-folder picker — only available in the desktop app
@@ -915,10 +1413,22 @@
     document.getElementById('saveTitle').hidden = false;
     rowSaveFolder.hidden = false;
     saveFolderLabel.textContent = folderName(settings.saveDir);
-    rowSaveFolder.addEventListener('click', async () => {
+    // the folder name is a link — click it to open the folder in Finder
+    saveFolderLabel.classList.add('setlink');
+    saveFolderLabel.title = 'open in Finder';
+    saveFolderLabel.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (window.typeAPI.openFolder) window.typeAPI.openFolder(settings.saveDir || null);
+    });
+    // "choose…" picks a different folder
+    const chooseBtn = rowSaveFolder.querySelector('.setpick');
+    (chooseBtn || rowSaveFolder).addEventListener('click', async (e) => {
+      e.stopPropagation();
       const dir = await window.typeAPI.pickFolder();
       if (dir) { settings.saveDir = dir; saveSettings(); saveFolderLabel.textContent = folderName(dir); }
     });
+    const dTip = document.getElementById('saveTitle').querySelector('.tip');
+    if (dTip) dTip.textContent = 'Kept pages are plain .md files. Click the folder name to open it in Finder. Choose any folder — point it at your iCloud “type” folder to sync with iPhone, or your Obsidian vault. No iCloud needed; without it they just stay on this Mac.';
     document.getElementById('rowOnTop').hidden = false;   // window-level toggle, desktop only
   }
 
@@ -971,7 +1481,11 @@
   // line width adapts to the window — no fixed character count, no minimum screen size
   let MAX_COLS = 62;
   let BELL_AT  = 56;
-  const LINE_H_PX = () => parseFloat(getComputedStyle(feed).lineHeight);
+  // row pitch = the airy double-spaced rhythm (line box + the gap between lines).
+  // layout() rolls the platen by whole rows, so this must be the full pitch, not
+  // the now-tight line-height that keeps the native caret small.
+  // committed lines (what the platen rolls past) use the full line spacing
+  const LINE_H_PX = () => (parseFloat(getComputedStyle(feed).fontSize) || 18) * (settings.lineSpace || 1.5);
   function computeCols() {
     const w = feed.parentElement.getBoundingClientRect().width;
     const fs = parseFloat(getComputedStyle(feed).fontSize) || 18;
@@ -1030,15 +1544,20 @@
     const src = ctx.createBufferSource(); src.buffer = buf;
     return src;
   }
+  let lastThock = 0;
   function thock() {
     if (!settings.sound) return;
     if (!settings.clicks) return;
     const ctx = AC(), t = ctx.currentTime;
-    // a dry, soft key click — broadband noise, no pitch, no resonance, no drummy body.
-    // (tuned/resonant content is what turns into machine-gun or bongo when typing fast)
-    const v = 0.15 + Math.random() * 0.05;            // clearly audible, slight per-press variation
-    const nd = 0.02 + Math.random() * 0.006;
-    const src = burst(nd, 2.8);
+    // Fast typing was smearing the clicks into a gross buzz because each press's
+    // noise burst overlapped the last. Two fixes: (1) a short throttle so two
+    // strikes can't stack on top of each other, and (2) a crisper, shorter burst
+    // that decays before the next key — a dry click, not a wash.
+    if (t - lastThock < 0.035) return;                // ~max 28 strikes/sec; no pile-up
+    lastThock = t;
+    const v = 0.13 + Math.random() * 0.04;            // clearly audible, slight per-press variation
+    const nd = 0.012 + Math.random() * 0.004;         // shorter tail so rapid keys stay distinct
+    const src = burst(nd, 3.4);                        // steeper decay = drier, snappier
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1500 + Math.random() * 1300; bp.Q.value = 0.6;
     const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500;  // strip drummy body, keep presence
     const g = ctx.createGain(); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + nd);
@@ -1303,8 +1822,9 @@
 
   function markTyping() {
     stage.classList.add('typing');
+    document.body.classList.add('typing');   // fades the corner glyphs for a clean screen
     clearTimeout(typeRestTimer);
-    typeRestTimer = setTimeout(() => stage.classList.remove('typing'), 650);
+    typeRestTimer = setTimeout(() => { stage.classList.remove('typing'); document.body.classList.remove('typing'); }, 650);
   }
 
   /* ================= INTRO ================= */
@@ -1370,11 +1890,21 @@
       activeEl.style.transition = '';
       activeEl.style.transform = 'translateX(0)';
       activeEl.classList.remove('intro-line');
-      if (!activeEl.querySelector('.caret')) activeEl.appendChild(caretEl());
       phase = 'writing';
+      current = '';
+      const animationFollows = !seenWelcome() || settings.quoteOpen;
       hints.classList.remove('dim');     // idle at the start → controls visible
-      if (!seenWelcome()) { markWelcomed(); introTimers.push(setTimeout(() => seedWelcome(settings.quoteOpen ? () => seedQuote(OPENER) : null), 360)); }
-      else if (settings.quoteOpen) introTimers.push(setTimeout(() => seedQuote(OPENER), 360));   // fixed opener, every launch
+      if (settings.editable) {
+        // editable mode is a plain native note — no welcome/quote choreography
+        // (those play into the custom platen, which stands down here)
+        enterWriting(true);
+        if (!seenWelcome()) markWelcomed();
+        syncEditableSurface();
+      } else {
+        enterWriting(!animationFollows);   // keyboard waits if an opener quote/welcome still plays; else up now
+        if (!seenWelcome()) { markWelcomed(); introTimers.push(setTimeout(() => seedWelcome(settings.quoteOpen ? () => seedQuote(OPENER) : null), 360)); }
+        else if (settings.quoteOpen) introTimers.push(setTimeout(() => seedQuote(OPENER), 360));   // fixed opener, every launch
+      }
     }, t));
   }
 
@@ -1443,140 +1973,27 @@
   // and user-typed paragraphs (preserving blank-line paragraph breaks).
   let lastMaxCols = MAX_COLS;
   function reflowLocked() {
-    if (phase !== 'writing') return;
-    if (cursor !== null || quotePlaying) return;       // mid-overstrike or mid-typed-quote: skip
-    if (lastMaxCols === MAX_COLS) return;
+    // The committed lines are native text (white-space: pre-wrap) and the live
+    // line is a real contenteditable, so the browser re-wraps everything on a
+    // width change for free. We must NOT rebuild the feed here — tearing it down
+    // would detach the focused live line and drop the keyboard. Just keep the
+    // column estimate current for the seeding animations.
     lastMaxCols = MAX_COLS;
-    if (locked.length === 0) return;
-
-    // --- 1. Reflow the seeded quote portion, if any ---
-    // Read body vs attribution from existing DOM classes (set by seedQuote).
-    let attribCount = 0;
-    const newQuote = [];
-    if (userFloor > 0) {
-      const bodyTxt = [];
-      const attribTxt = [];
-      for (let i = 0; i < userFloor; i++) {
-        const txt = locked[i];
-        if (txt === '') continue;                       // skip gaps, regenerate
-        const el = feed.children[i];
-        if (el && el.classList.contains('attrib')) attribTxt.push(txt);
-        else bodyTxt.push(txt);
-      }
-      if (bodyTxt.length) {
-        for (const l of wrapText(bodyTxt.join(' '), MAX_COLS)) newQuote.push(l);
-      }
-      if (attribTxt.length) {
-        const wrapped = wrapText(attribTxt.join(' '), MAX_COLS);
-        attribCount = wrapped.length;
-        for (const l of wrapped) newQuote.push(l);
-      }
-      newQuote.push('');                                // trailing gap before user writing
-    }
-
-    // --- 2. Reflow the user-typed portion, preserving paragraph breaks ---
-    // Each md block (blockquote / bullet item / heading) is unwrapped,
-    // rewrapped to its body width, then re-prefixed. Plain prose between
-    // blocks reflows as a single paragraph.
-    const user = locked.slice(userFloor);
-    const newUser = [];
-    let prose = [];
-    const flushProse = () => {
-      if (!prose.length) return;
-      for (const l of wrapText(prose.join(' '), MAX_COLS)) newUser.push(l);
-      prose = [];
-    };
-    let i = 0;
-    while (i < user.length) {
-      const ln = user[i];
-      if (ln === '') { flushProse(); newUser.push(''); i++; continue; }
-
-      // blockquote: run of consecutive "> " lines
-      if (ln.startsWith('> ')) {
-        flushProse();
-        const body = [];
-        while (i < user.length && user[i].startsWith('> ')) { body.push(user[i].slice(2)); i++; }
-        const wrapped = wrapText(body.join(' '), Math.max(4, MAX_COLS - 2));
-        for (const l of wrapped) newUser.push('> ' + l);
-        continue;
-      }
-
-      // heading: one "# … " line + any "  " continuations
-      let m = ln.match(/^(#{1,6}) /);
-      if (m) {
-        flushProse();
-        const markerLen = m[0].length;
-        const parts = [ln.slice(markerLen)];
-        i++;
-        while (i < user.length && user[i].startsWith('  ')) { parts.push(user[i].slice(2)); i++; }
-        const wrapped = wrapText(parts.join(' '), Math.max(4, MAX_COLS - markerLen));
-        if (!wrapped.length) wrapped.push('');
-        newUser.push(m[0] + wrapped[0]);
-        for (let j = 1; j < wrapped.length; j++) newUser.push('  ' + wrapped[j]);
-        continue;
-      }
-
-      // bullet item: one "- " / "* " line + any "  " continuations
-      m = ln.match(/^([-*]) /);
-      if (m) {
-        flushProse();
-        const marker = m[0];
-        const parts = [ln.slice(2)];
-        i++;
-        while (i < user.length && user[i].startsWith('  ')) { parts.push(user[i].slice(2)); i++; }
-        const wrapped = wrapText(parts.join(' '), Math.max(4, MAX_COLS - 2));
-        if (!wrapped.length) wrapped.push('');
-        newUser.push(marker + wrapped[0]);
-        for (let j = 1; j < wrapped.length; j++) newUser.push('  ' + wrapped[j]);
-        continue;
-      }
-
-      prose.push(ln);
-      i++;
-    }
-    flushProse();
-
-    const newLocked = newQuote.concat(newUser);
-    const newUserFloor = newQuote.length;
-
-    // No-op if nothing actually changed
-    if (newUserFloor === userFloor && newLocked.length === locked.length && newLocked.every((l, i) => l === locked[i])) return;
-
-    locked = newLocked;
-    userFloor = newUserFloor;
-    if (quoteHold) quoteHold.floor = userFloor;
-
-    // --- 3. Rebuild the feed DOM from the new locked array ---
-    // applyMdClass inspects previousElementSibling for -cont detection,
-    // so the element must be parented before classes are applied.
-    feed.innerHTML = '';
-    const attribStart = userFloor - 1 - attribCount;    // first index of attribution band
-    for (let i = 0; i < locked.length; i++) {
-      const el = document.createElement('div');
-      el.className = 'line';
-      if (i < userFloor) {
-        el.classList.add('quoteline');
-        if (i >= attribStart && i < userFloor - 1 && locked[i] !== '') el.classList.add('attrib');
-      }
-      for (const c of locked[i]) el.appendChild(inkSpan(c));
-      feed.appendChild(el);
-      applyMdClass(el, locked[i]);
-    }
-    activeEl = null;
-    renderActive();
-    persistDraft();
   }
 
   function quoteCommitSilent(cls) {           // commit the active line with no sound, no slide
-    if (activeEl) {
-      activeEl.classList.remove('cr');
-      if (cls) activeEl.classList.add(cls);
-      renderInto(activeEl, current, accentPeriod);
-    }
+    // freeze the animated line into a static committed div ABOVE the persistent
+    // active line (same shape as commitLine, minus sound/focus)
+    const div = document.createElement('div');
+    div.className = 'line';
+    if (cls) div.classList.add(cls);
+    renderInto(div, current, accentPeriod);
+    feed.insertBefore(div, activeEl);
+    applyMdClass(div, current);
     locked.push(current);
     current = '';
-    activeEl = null;
     bellRung = false;
+    if (activeEl) activeEl.textContent = '';
     renderActive();
     layout();
   }
@@ -1606,6 +2023,7 @@
       quoteShown = true;                      // show the remove-× to the right of the quote
       layout();
       quotePlaying = false; quoteSkip = null;
+      enterWriting();                         // the live native line takes over
     };
 
     const CHAR = 40;   // deliberate, like a person typing it out
@@ -1671,6 +2089,7 @@
       quoteHold = { floor: locked.length };
       userFloor = locked.length;              // the welcome doesn't count toward your word count
       layout();
+      enterWriting();
     };
     const finishLast = () => {                 // commit "type." without the scroll jump, then hand off
       timers.forEach(clearTimeout); timers = [];
@@ -1680,11 +2099,14 @@
       accentPeriod = false;
       quotePlaying = false; quoteSkip = null;
       userFloor = locked.length;
+      renderActive();                           // make the live line editable during the pause so a keystroke isn't dropped
       if (onDone) {
         const floorNow = locked.length;
         timers.push(setTimeout(() => {
           if (!frozen && !quotePlaying && locked.length === floorNow && current === '') fadeWelcomeToQuote(onDone);
         }, 2000));   // let "Type." sit for two seconds
+      } else {
+        enterWriting();                         // no quote follows — write now
       }
     };
     const typeLine = (i) => {
@@ -1738,30 +2160,136 @@
     if (activeEl) {
       activeEl.style.transition = ''; activeEl.style.transform = 'translateX(0)';
       activeEl.classList.remove('intro-line');
-      activeEl.textContent = ''; activeEl.appendChild(caretEl());
+      activeEl.textContent = '';
     }
     current = '';
     phase = 'writing';
+    enterWriting();          // native contenteditable takes over
     layout();
     nudgeHints();
   }
 
   /* ================= WRITING ================= */
+  // put the native caret at the end of the live line and keep the keyboard up
+  function focusActiveEnd() {
+    if (!activeEl) return;
+    try {
+      activeEl.focus({ preventScroll: true });
+      const r = document.createRange(); r.selectNodeContents(activeEl); r.collapse(false);
+      const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    } catch (e) {}
+  }
+  // hand the page to the user after the intro / welcome / quote. We're here to
+  // write, so bring the keyboard up the moment writing is actually possible.
+  // doFocus is false at the intro hand-off when an opener quote still follows —
+  // focusing then would only pop the keyboard up and drop it again as the quote
+  // takes the line non-editable. The quote/welcome's own end calls it true.
+  function enterWriting(doFocus) {
+    renderActive();
+    layout();
+    if (doFocus !== false) focusActiveEnd();   // keyboard up on iOS too (native shell allows programmatic focus)
+  }
+
+  // the live line IS a native contenteditable — iOS/macOS own its text, caret,
+  // autocorrect, dictation, undo. We attach listeners once and only ever READ
+  // from it; we never re-render it while the user is typing.
+  function bindActive(el) {
+    el.addEventListener('beforeinput', (e) => {
+      if (frozen || phase !== 'writing') { e.preventDefault(); return; }
+      if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
+        if (quotePlaying && quoteSkip) quoteSkip();
+        if (settings.editable) {
+          // editable page: a return is a real new line you can come back to — no lock.
+          // let the native newline happen; the input handler syncs `current`.
+          if (typeHaptic) typeHaptic('return');
+          carriageReturn();
+          return;
+        }
+        e.preventDefault();                       // locked page: return commits the line
+        if (typeHaptic) typeHaptic('return');
+        commitLine(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
+        return;
+      }
+      if (e.inputType && e.inputType.startsWith('insert')) { unlockAudio(); thock(); if (typeHaptic) typeHaptic('key'); }
+      else if (e.inputType && e.inputType.startsWith('delete')) { if (typeHaptic) typeHaptic('key'); }
+    });
+    el.addEventListener('input', () => {
+      if (frozen || phase !== 'writing') return;
+      if (quotePlaying && quoteSkip) quoteSkip();
+      current = el.innerText.replace(/​/g, '').replace(/\n+$/, '');
+      markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter(); layout();
+      positionEditCaret();
+    });
+    el.addEventListener('focus', positionEditCaret);
+    el.addEventListener('blur', () => { if (editCaret) editCaret.style.display = 'none'; });
+    // hardware-keyboard return (no beforeinput insertParagraph on some setups)
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+        if (settings.editable) return;            // editable page: let the native newline happen
+        e.preventDefault();
+        if (frozen || phase !== 'writing') return;
+        if (quotePlaying && quoteSkip) quoteSkip();
+        commitLine(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
+      }
+    });
+    // editable page: tapping into your text must NOT roll the page out from under
+    // your finger. Only re-center when the caret has strayed off-screen (e.g. an
+    // arrow key walked it past the edge); a tap that lands in view stays put.
+    document.addEventListener('selectionchange', () => {
+      if (!settings.editable || document.activeElement !== el || phase !== 'writing') return;
+      const sel = window.getSelection();
+      if (!sel || !sel.isCollapsed || !sel.rangeCount) return;
+      const r = sel.getRangeAt(0).getBoundingClientRect();
+      if (!r || !r.height) return;
+      const vv = window.visualViewport;
+      const vTop = vv ? vv.offsetTop : 0, vH = vv ? vv.height : window.innerHeight;
+      if (r.top < vTop + vH * 0.12 || r.bottom > vTop + vH * 0.80) layout();   // pull into view only when it strays
+      positionEditCaret();
+    });
+  }
+
   function renderActive(cr) {
     if (!activeEl) {
       activeEl = document.createElement('div');
-      activeEl.className = 'line';
       feed.appendChild(activeEl);
     }
+    // assert the live-line identity even if another path (runIntro) made a bare
+    // div, and bind the native listeners exactly once
+    activeEl.classList.add('line', 'active-line');
+    if (!activeEl.dataset.bound) {
+      activeEl.dataset.bound = '1';
+      activeEl.setAttribute('autocorrect', 'on');
+      activeEl.setAttribute('autocapitalize', 'sentences');
+      // macOS (Electron) gates native autocorrect behind spellcheck, so turn it on
+      // there; iOS gets autocorrect from the autocorrect attribute and stays clean
+      activeEl.setAttribute('spellcheck', (window.typeAPI && window.typeAPI.isDesktop) ? 'true' : 'false');
+      bindActive(activeEl);
+    }
     if (cr) activeEl.classList.add('cr');
-    applyMdClass(activeEl, current);            // live: style snaps on as soon as "# ", "> ", or "- " is typed
-    renderInto(activeEl, current, accentPeriod);
-    activeEl.appendChild(caretEl());
+    if (quotePlaying || phase === 'intro') {
+      // animation (intro / welcome / quote): styled spans, not editable, no native caret
+      activeEl.removeAttribute('contenteditable');
+      applyMdClass(activeEl, current);
+      renderInto(activeEl, current, accentPeriod);
+    } else {
+      activeEl.setAttribute('contenteditable', 'true');
+      applyMdClass(activeEl, current);
+      // set text only when it diverges (programmatic: commit-clear, restore,
+      // intro hand-off) — never clobber what the OS is rendering as you type
+      if ((activeEl.innerText || '').replace(/​/g, '') !== current) activeEl.textContent = current;
+    }
   }
 
   // active line is pinned to the strike point (vertical middle); finished lines
   // roll up above it and fade under the veil.
   function layout() {
+    // editable mode owns its own native scrolling — the transform platen stands
+    // down so it can't fight the textarea.
+    if (editActive()) return;
+    // while the sheet is ejecting on keep, leave its transform alone — a stray
+    // layout (e.g. the keyboard dismissing fires a viewport resize) would cancel
+    // the roll-up and snap the page back under the stamp.
+    if (feed.classList.contains('eject')) return;
     const lh = LINE_H_PX();
     // the page stays put — overstriking moves only the block cursor across the
     // committed lines that are already visible, never the page itself
@@ -1777,27 +2305,95 @@
       else if (d <= 2 * H) offset = 2 * H - d;      // catch up: roll back to the strike point
       else { offset = 0; quoteHold = null; }        // done — ordinary centered writing
     }
-    feed.style.transform = `translateY(${-(locked.length - offset) * lh}px)`;
+    // A long active line wraps DOWNWARD as you type; without this it would grow
+    // past the strike point into the keyboard. Roll the platen by the caret's
+    // pixel offset within the active line so the line you're on keeps riding the
+    // strike point — the page moves up under you, like a carriage advancing.
+    const extraPx = caretPixelOffset();
+    feed.style.transform = `translateY(${-(locked.length - offset) * lh - extraPx}px)`;
     positionQuoteX();
   }
 
-  function commitLine() {
-    if (activeEl) {
-      activeEl.classList.remove('cr');
-      activeEl.textContent = '';
-      for (const c of current) activeEl.appendChild(inkSpan(c));
+  // how far (px) the writing row sits below the top of the active line — i.e. how
+  // many wrapped rows deep the paragraph is. You type at the end, so the last
+  // wrapped row is where the caret is; measuring the element's height is far more
+  // reliable than a collapsed-selection rect. 0 on a single-row line.
+  function caretPixelOffset() {
+    if (!activeEl) return 0;
+    // the active line's real rendered row box: --leading on the locked page,
+    // --space in editable mode. Read it computed so a single-row line nets to 0
+    // in BOTH modes (locked 22.5-22.5; editable air 36-36) — a hardcoded 1.25
+    // over-rolled the platen in editable air, drifting the fresh caret upward.
+    const cs = getComputedStyle(activeEl);
+    const lhPx = parseFloat(cs.lineHeight);
+    const oneRow = (lhPx && !isNaN(lhPx)) ? lhPx : (parseFloat(cs.fontSize) || 18) * 1.25;
+    // editable page: the caret can sit anywhere in the multi-line entry, so
+    // measure where it actually is. (Locked page always types at the end, so the
+    // element height is the reliable, cheaper measure.)
+    if (settings.editable) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const r = sel.getRangeAt(0);
+        if (activeEl.contains(r.startContainer)) {
+          const rect = r.getBoundingClientRect();
+          if (rect && rect.height) return Math.max(0, rect.top - activeEl.getBoundingClientRect().top);
+        }
+      }
     }
+    return Math.max(0, activeEl.offsetHeight - oneRow);
+  }
+
+  // editable page only: paint a small caret (the native one tracks the airy
+  // line-height and looks oversized). Lives inside #feed so it rolls with the
+  // platen; sized to the type, centered in the line box.
+  let editCaret = null;
+  function positionEditCaret() {
+    if (editActive()) { if (editCaret) editCaret.style.display = 'none'; return; }   // native textarea draws its own caret
+    if (!settings.editable) { if (editCaret) editCaret.style.display = 'none'; return; }
+    if (!editCaret) { editCaret = document.createElement('div'); editCaret.id = 'editCaret'; feed.appendChild(editCaret); }
+    const sel = window.getSelection();
+    if (document.activeElement !== activeEl || !sel || !sel.rangeCount || !sel.isCollapsed) { editCaret.style.display = 'none'; return; }
+    const r = sel.getRangeAt(0);
+    if (!activeEl || !activeEl.contains(r.startContainer)) { editCaret.style.display = 'none'; return; }
+    const fs = parseFloat(getComputedStyle(activeEl).fontSize) || 18;
+    let rect = r.getBoundingClientRect();
+    if (!rect || !rect.height) {                 // empty line — sit at the line's start
+      const ar = activeEl.getBoundingClientRect();
+      rect = { left: ar.left, top: ar.top, height: fs * (settings.lineSpace || 1.5) };
+    }
+    const fr = feed.getBoundingClientRect();
+    const h = Math.round(fs * 1.15);
+    editCaret.style.display = 'block';
+    editCaret.style.height = h + 'px';
+    editCaret.style.left = Math.round(rect.left - fr.left) + 'px';
+    editCaret.style.top = Math.round(rect.top - fr.top + (rect.height - h) / 2) + 'px';
+  }
+
+  function commitLine() {
+    // pull the latest text straight off the live native line
+    if (activeEl) current = activeEl.innerText.replace(/​/g, '').replace(/\n+$/, '');
+    // freeze it into a static span-rendered line ABOVE the (persistent) active
+    // line — spans so the burn-ash animation has chars to char; markdown styles
+    // on commit (a "# "/"> "/"- " line snaps to its style here, not mid-typing)
+    const div = document.createElement('div');
+    div.className = 'line';
+    renderInto(div, current, accentPeriod);
+    feed.insertBefore(div, activeEl);
+    applyMdClass(div, current);          // after insert so a -cont can see its prev sibling
     locked.push(current);
     current = '';
-    activeEl = null;
     bellRung = false;
-    renderActive(true);     // new line sweeps in (carriage return)
+    if (activeEl) {                       // retrigger the carriage sweep each commit (reflow so the one-shot anim replays)
+      activeEl.textContent = '';
+      activeEl.classList.remove('cr'); void activeEl.offsetWidth; activeEl.classList.add('cr');
+    }
     layout();
     carriageReturn();       // swish + seat-chunk back to the margin
+    focusActiveEnd();       // keep the keyboard up and the caret ready
   }
 
   function newSheet() {
-    locked = []; current = ''; activeEl = null; bellRung = false;
+    locked = []; current = ''; bellRung = false;
     quoteHold = null;
     sheetStart = null;
     userFloor = 0;
@@ -1806,7 +2402,10 @@
     stage.classList.remove('overstriking');
     coolSmolder();
     clearDraft();
-    feed.innerHTML = '';
+    // remove committed lines but KEEP the persistent native active line (so the
+    // keyboard never drops and there's no contenteditable to re-create)
+    feed.querySelectorAll('.line:not(.active-line)').forEach((el) => el.remove());
+    if (activeEl) activeEl.textContent = '';
     feed.classList.remove('eject');
     feed.style.transition = 'none';            // snap back to the top — no cursor sliding down
     feed.style.transform = 'translateY(0)';
@@ -1815,12 +2414,17 @@
     renderActive();
     layout();
     updateMeter();
+    if (typeof refreshShare === 'function') refreshShare();   // fresh sheet → hide the share glyph
   }
 
   function pushChar(c) {
     // double-space -> period (only after a word, not after punctuation).
     // a typing affordance only — pasted text keeps its spaces as written.
-    if (!pasting && c === ' ' && current.endsWith(' ') && !current.endsWith('  ') &&
+    // Desktop only: iOS's system keyboard already owns this shortcut. Running
+    // our own on top of it made the two fight — that's the source of the stray
+    // periods and learned words on the phone. Let iOS be the sole authority.
+    if (!(window.typeAPI && window.typeAPI.isIOS) &&
+        !pasting && c === ' ' && current.endsWith(' ') && !current.endsWith('  ') &&
         /[\w)"'\]]/.test(current[current.length - 2] || '')) {
       current = current.slice(0, -1) + '. ';
       renderActive();
@@ -1860,6 +2464,9 @@
   /* ================= SAVE (eject + stamp) ================= */
   function save() {
     if (frozen || phase !== 'writing') return;
+    if (editActive()) exitEditableToPlaten();  // native surface → platen, so the eject animation has lines to lift
+    else if (activeEl) current = activeEl.innerText.replace(/​/g, '').replace(/\n+$/, '');  // sync the live line
+    if (!hasContent()) return;                 // nothing written — don't keep a blank page
     // iPhone, first keep, no folder chosen yet: ask where pages should live,
     // then keep. Cancelling still keeps — to the iCloud Drive default — and
     // the question comes back on the next keep until a folder is picked.
@@ -1889,7 +2496,9 @@
     const stamp = now.toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' });
     const front = `---\ndate: ${now.toISOString().slice(0,10)}\nkept: ${stamp}\nwords: ${words}\n---\n\n`;
     const body = front + prose + '\n';
-    const fileStamp = now.toISOString().slice(0,16).replace(/[:T]/g,'-');
+    // seconds, not minutes — two pages kept in the same minute were colliding
+    // on one filename and the second overwrote the first ("not saving recent").
+    const fileStamp = now.toISOString().slice(0,19).replace(/[:T]/g,'-');
     const filename = `type-${fileStamp}.md`;
 
     if (window.typeAPI && window.typeAPI.saveNote) {
@@ -1930,7 +2539,7 @@
       bell(0.1);
     }, 620);
 
-    setTimeout(() => { stampEl.classList.remove('show'); newSheet(); frozen = false; }, 2720);
+    setTimeout(() => { stampEl.classList.remove('show'); newSheet(); frozen = false; syncEditableSurface(); }, 2720);
   }
 
   /* ================= BURN (ember + smoke + stillness) ================= */
@@ -2014,6 +2623,9 @@
   function enterFeedbackMode() {
     if (feedbackMode || frozen) return;
     if (quotePlaying && quoteSkip) quoteSkip();
+    // editable: pull the note out of the native surface and tuck it away so it
+    // doesn't overlay the feedback sheet (it's restored on exit)
+    if (editActive()) { syncFromEditable(); editSurface.hidden = true; document.body.classList.remove('edit-active'); }
     // stash everything that defines the current sheet
     const hadContent = (locked && locked.length > 0) || (current && current.length > 0);
     stashedSheet = {
@@ -2061,6 +2673,7 @@
       feedbackPaused.textContent = "page paused. back when you're done.";
       feedbackPaused.classList.add('show');
     }
+    focusActiveEnd();    // bring the keyboard up so you can type the feedback right away
   }
 
   function exitFeedbackMode(sent) {
@@ -2094,6 +2707,7 @@
       layout();
       persistDraft();
       updateMeter();
+      syncEditableSurface();   // if the restored sheet is editable, reopen the native surface
     }
     stashedSheet = null;
     if (sent) {
@@ -2130,8 +2744,11 @@
   function burn() {
     if (frozen || phase !== 'writing') return;
     frozen = true;
+    document.body.classList.remove('has-prose');   // hide the share glyph as the page burns
     coolSmolder();
-    const caret = feed.querySelector('.caret'); if (caret) caret.remove();
+    if (editActive()) exitEditableToPlaten();      // native surface → platen so the chars can burn
+    // freeze the live native line into spans so it chars along with the rest
+    if (activeEl) { activeEl.removeAttribute('contenteditable'); activeEl.blur(); renderInto(activeEl, current, accentPeriod); }
     const chars = [...feed.querySelectorAll('.ch')];
     chars.forEach((s, i) => {
       s.classList.add('ash');
@@ -2145,7 +2762,8 @@
     // echo the burnt-orange period in the wordmark
     setTimeout(() => {
       newSheet(); frozen = false;
-      if (settings.quoteBurn) setTimeout(seedQuote, 450);   // a quote types in after the burn, then rolls up as you write
+      if (settings.editable) syncEditableSurface();                // reopen a fresh native note
+      else if (settings.quoteBurn) setTimeout(seedQuote, 450);     // a quote types in after the burn, then rolls up as you write
     }, 3000);  // a held beat before the fresh sheet (the char-burn runs longer)
   }
 
@@ -2223,15 +2841,18 @@
   const DRAFT_KEY = 'type.draft';
   let draftTimer = null;
   function persistDraft() {
+    if (feedbackMode) return;     // never let feedback text overwrite the real page's draft
     clearTimeout(draftTimer);
     draftTimer = setTimeout(() => {
       try {
+        if (feedbackMode) return;
         if (phase !== 'writing' || !hasContent()) { localStorage.removeItem(DRAFT_KEY); return; }
         localStorage.setItem(DRAFT_KEY, JSON.stringify({ locked, current }));
       } catch (e) {}
     }, 350);
   }
   function clearDraft() {
+    if (feedbackMode) return;     // entering feedback must not wipe the real page's saved draft
     clearTimeout(draftTimer);
     try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
   }
@@ -2247,19 +2868,21 @@
     locked = d.locked.slice();
     current = d.current || '';
     phase = 'writing';
-    feed.innerHTML = '';
+    feed.querySelectorAll('.line:not(.active-line)').forEach((el) => el.remove());
+    renderActive();                          // ensure the persistent active line exists
     for (const ln of locked) {
       const el = document.createElement('div');
       el.className = 'line';
-      for (const c of ln) el.appendChild(inkSpan(c));
-      feed.appendChild(el);
-      applyMdClass(el, ln);                  // after append so -cont can see prev sibling
+      renderInto(el, ln, false);
+      feed.insertBefore(el, activeEl);       // committed lines sit above the active one
+      applyMdClass(el, ln);                  // after insert so -cont can see prev sibling
     }
-    activeEl = null;
     renderActive();
     layout();
     hints.classList.remove('dim');
     scheduleSmolder();
+    if (typeof refreshShare === 'function') refreshShare();   // a restored draft has prose → show the share glyph
+    syncEditableSurface();   // if the restored sheet is editable, open the native surface
   }
 
   /* ================= METER (word count + timer) ================= */
@@ -2463,12 +3086,115 @@
   }
   quoteShare.addEventListener('click', shareCurrentQuote);
 
+  // ---- share your page as a typed sheet (not a raw screenshot) ----
+  // Renders the prose onto a phone-wallpaper-sized canvas (1290×2796) in the
+  // active theme, mono, your line spacing — so the one image both posts nicely
+  // to Instagram AND saves straight as an iPhone background. Font auto-fits so
+  // the whole page sits centered. The native share modal (iOS share sheet /
+  // macOS share menu) provides Save Image, Instagram, AirDrop, etc.
+  async function renderProseSheet(text) {
+    text = (text || '').replace(/\s+$/, '');
+    if (!text) return null;
+    const scale = 1, W = 1290, H = 2796;     // already retina-resolution; full phone wallpaper
+    const padX = Math.round(W * 0.12);
+    const maxW = W - padX * 2;
+    const space = settings.lineSpace || 1.5;
+    const styles = getComputedStyle(document.body);
+    const paper  = (styles.getPropertyValue('--paper')     || '#ffffff').trim();
+    const ink    = (styles.getPropertyValue('--ink')       || '#121316').trim();
+    const faint  = (styles.getPropertyValue('--ink-faint') || '#c2c4c9').trim();
+    const accent = (styles.getPropertyValue('--accent')    || '#df5a26').trim();
+    const m = document.createElement('canvas').getContext('2d');
+    // The text lives in a lower band that clears the iOS lock-screen clock at
+    // the top (it reserves roughly the top third) and the home indicator at the
+    // bottom — so the same image reads as a wallpaper without the clock landing
+    // on the words. Auto-fit shrinks the type until it fits that band.
+    const bandTop = Math.round(H * 0.34);
+    const bandBot = Math.round(H * 0.90);
+    const availH = bandBot - bandTop;
+    // Start at the font size that fits the SAME number of characters per line as
+    // the writing screen (MAX_COLS), so the image wraps at the same points — no
+    // surprise extra line breaks. Only shrink from there if the page is too tall.
+    const cols = Math.max(20, MAX_COLS || 32);
+    let FS = Math.min(72, Math.round(maxW / (cols * 0.62))), lines = [], lh = 0, blockH = 0;
+    for (; FS >= 26; FS -= 2) {
+      try { await document.fonts.load(`${FS}px "Courier Prime"`); } catch (_) {}
+      m.font = `${FS}px "Courier Prime", "Courier New", monospace`;
+      lines = [];
+      for (const para of text.split('\n')) {
+        if (para === '') { lines.push(''); continue; }
+        for (const l of wrapByWidth(m, para, maxW)) lines.push(l);
+      }
+      lh = Math.round(FS * space);
+      blockH = lines.length * lh;
+      if (blockH <= availH) break;
+    }
+    // The loop floors at FS=26; a long page can still overflow there. Keep the
+    // wrap points already computed (so lines don't reflow) but shrink the row
+    // pitch to the fixed line count so the block always fits the clock-safe band
+    // and never runs under the footer / home indicator.
+    if (blockH > availH && lines.length > 0) {
+      lh = Math.floor(availH / lines.length);
+      FS = Math.max(12, Math.floor(lh / space));
+      blockH = lines.length * lh;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = W * scale; canvas.height = H * scale;
+    const ctx = canvas.getContext('2d'); ctx.scale(scale, scale);
+    ctx.fillStyle = paper; ctx.fillRect(0, 0, W, H);
+    ctx.textBaseline = 'top';
+    ctx.font = `${FS}px "Courier Prime", "Courier New", monospace`;
+    ctx.fillStyle = ink;
+    const top = bandTop + Math.max(0, Math.round((availH - blockH) / 2));   // centered within the clock-safe band
+    lines.forEach((l, i) => ctx.fillText(l, padX, top + i * lh));
+    // quiet footer: date left, "type." right (period burnt-orange)
+    const FFS = Math.round(W * 0.026);
+    const footY = Math.round(H * 0.92);
+    ctx.font = `${FFS}px "Courier Prime", "Courier New", monospace`;
+    ctx.fillStyle = faint;
+    const dStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase().replace(/,/g, '');
+    ctx.fillText(dStr, padX, footY);
+    const wWord = ctx.measureText('type').width, wDot = ctx.measureText('.').width;
+    ctx.fillStyle = faint;  ctx.fillText('type', W - padX - wWord - wDot, footY);
+    ctx.fillStyle = accent; ctx.fillText('.', W - padX - wDot, footY);
+    return canvas.toDataURL('image/png');
+  }
+  async function shareCurrentPage() {
+    if (editActive()) syncFromEditable();   // pull the latest note text out of the native surface
+    const prose = [...locked.slice(userFloor), current].join('\n').replace(/\s+$/, '');
+    if (!prose) return;
+    if (typeHaptic) typeHaptic('key');
+    try {
+      const dataUrl = await renderProseSheet(prose);
+      if (dataUrl && window.typeAPI && typeof window.typeAPI.shareImage === 'function') {
+        await window.typeAPI.shareImage({ dataUrl, slug: 'type-page' });
+      }
+    } catch (e) { console.warn('share page error:', e); }
+  }
+  // the share glyph only appears once there's prose to share
+  function refreshShare() {
+    const has = (locked.length > userFloor) || (current && current.trim().length > 0);
+    document.body.classList.toggle('has-prose', !!has && phase === 'writing' && !frozen);
+  }
+  // one glyph, both platforms (CSS places it: iOS top-left, desktop top-right)
+  (function makeShareGlyph() {
+    const g = document.createElement('span');
+    g.className = 'prose-share';
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-label', 'share this page');
+    // same grid (24) + stroke (1.6) as the settings hamburger so the line weight matches
+    g.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-label="share"><path d="M12 15V4"/><path d="M8.5 7.5L12 4L15.5 7.5"/><path d="M6 11.5V18A1.8 1.8 0 0 0 7.8 19.8H16.2A1.8 1.8 0 0 0 18 18V11.5"/></svg>';
+    document.body.appendChild(g);
+    g.addEventListener('click', shareCurrentPage);
+  })();
+
   /* ================= HINTS ================= */
   // inverted: typing hides the controls (just thoughts); a pause brings them back.
   function nudgeHints() {
     if (settingsEl.hidden) hints.classList.add('dim');     // hide while typing
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => { if (phase === 'writing') hints.classList.remove('dim'); }, 1300);
+    if (typeof refreshShare === 'function') refreshShare();   // show/hide the share glyph as prose appears
   }
 
   /* ================= INPUT ================= */
@@ -2483,29 +3209,22 @@
   let pasting = false;
   function pasteText(text) {
     if (!text || frozen || phase !== 'writing') return;
-    if (quotePlaying) { if (quoteSkip) quoteSkip(); else return; }
+    if (quotePlaying && quoteSkip) quoteSkip();
     text = text.replace(/\r\n?/g, '\n').replace(/\t/g, '  ');
-    if (cursor) {
-      if (!settings.editable) return;
-      const i = cursor.line, t = locked[i];
-      const ins = text.replace(/\s*\n\s*/g, ' ').slice(0, Math.max(0, MAX_COLS - t.length));
-      if (!ins) return;
-      locked[i] = t.slice(0, cursor.col) + ins + t.slice(cursor.col);
-      cursor.col += ins.length;
-      editRefresh(i);
-      nudgeHints();
-      return;
+    focusActiveEnd();
+    // insert natively (keeps the OS undo stack); each newline commits a line
+    const parts = text.split('\n');
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i]) document.execCommand('insertText', false, parts[i]);
+      if (i < parts.length - 1) commitLine();
     }
-    pasting = true;
-    try {
-      for (const c of text) {
-        if (c === '\n') commitLine();
-        else pushChar(c);
-      }
-    } finally { pasting = false; }
-    markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
+    if (activeEl) current = activeEl.innerText.replace(/​/g, '').replace(/\n+$/, '');
+    markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter(); layout();
   }
   window.addEventListener('paste', (e) => {
+    if (editActive()) return;   // editable mode: let the native textarea handle paste (OS undo stack intact)
+    // always route through pasteText so a multi-line paste commits line-by-line
+    // instead of dropping <br>/<div> into the single-line active element
     e.preventDefault();
     unlockAudio();
     const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
@@ -2595,79 +3314,36 @@
       e.preventDefault();
       if (frozen || phase !== 'writing') return;
       // ⌘⌫ wipes the current (still-uncommitted) line — committed lines stay locked
-      if (current.length > 0) { current = ''; renderActive(); thock(); }
+      if (current.length > 0) { current = ''; if (activeEl) activeEl.textContent = ''; thock(); }
       markTyping(); nudgeHints(); resetSmolder(); persistDraft(); updateMeter();
       return;
     }
     if (frozen) return;
-    // ⌘-arrows (and ⌃-arrows) are cursor navigation, not commands — let them
-    // through to the cursor before the catch-all below swallows them
-    if (mod && NAV.includes(e.key)) {
-      e.preventDefault();
-      if (!quotePlaying && phase === 'writing') moveOverstrike(e.key, e);
-      return;
-    }
-    if (mod) return;
+    if (mod) return;                       // any other ⌘/⌃ combo isn't ours — let it pass
 
     if (phase === 'intro') {
-      if (!introPlayed) { playIntro(); return; }
-      if (e.key === 'Enter' || e.key === 'Backspace' || e.key.length === 1) skipIntro();
-      else return;
-    }
-
-    if (NAV.includes(e.key)) {
-      e.preventDefault();
-      // ↑ lifts the cursor onto the line above; ←↑↓→ scrub across committed lines
-      if (!quotePlaying) moveOverstrike(e.key, e);
+      if (!introPlayed) { e.preventDefault(); playIntro(); return; }
+      if (e.key === 'Enter' || e.key === 'Backspace' || e.key.length === 1) { e.preventDefault(); skipIntro(); }
       return;
     }
 
-    // while the cursor sits on a prior line, only 'x' covers it; Enter exits; ⌫ scrubs left without deleting.
-    // on an editable page the same cursor just edits: type to insert, ⌫ to delete.
-    if (cursor) {
-      if (e.key === 'Enter') { e.preventDefault(); exitOverstrike(); return; }
-      if (settings.editable) {
-        if (e.key === 'Backspace') { e.preventDefault(); editDelete(); return; }
-        if (e.key.length === 1) { e.preventDefault(); editInsert(e.key); return; }
-        return;
-      }
-      if (e.key === 'Backspace') {
-        e.preventDefault();
-        overstrikeScrub();
-        return;
-      }
-      if (e.key === 'x' || e.key === 'X') { e.preventDefault(); overstrikeAt(cursor.line, cursor.col); return; }
-      if (e.key.length === 1) { e.preventDefault(); return; }   // ignore any other typed char — the page is locked, only x covers
+    // a quote is still typing itself in — the key finishes it (it doesn't also
+    // type; preventDefault so it isn't ghost-inserted into the just-focused line)
+    if (quotePlaying && (e.key === 'Enter' || e.key === 'Backspace' || e.key.length === 1)) {
+      e.preventDefault();
+      if (quoteSkip) quoteSkip();
+      focusActiveEnd();
       return;
     }
 
-    // a keystroke finishes a quote that's still typing itself in, then you carry on
-    if (quotePlaying && (e.key === 'Enter' || e.key === 'Backspace' || e.key.length === 1)) quoteSkip();
-
-    if (e.key === 'Enter') { e.preventDefault(); commitLine(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter(); return; }
-
-    if (e.key === 'Backspace') {
-      e.preventDefault();
-      if (current.length > 0) {
-        if (e.altKey) current = current.replace(/\S+\s*$/, '');     // ⌥⌫ — drop the previous word, keep the space before it
-        else current = current.slice(0, -1);                          // plain ⌫ — drop one character
-        renderActive(); thock();
-      }
-      markTyping(); nudgeHints(); resetSmolder(); persistDraft(); updateMeter();
-      return;
-    }
-
-    if (e.key.length === 1) {
-      e.preventDefault();
-      pushChar(e.key);
-      thock();
-      markTyping();
-      nudgeHints();
-      resetSmolder();
-      persistDraft();
-      ensureClock();
-      updateMeter();
-    }
+    // Everything else — printable keys, Enter, Backspace, arrows, selection — is
+    // handled natively by the contenteditable active line and its own listeners.
+    // Just make sure it holds focus so desktop keystrokes land in it — but never
+    // steal focus from the kept-drawer search or a settings field.
+    const ae = document.activeElement;
+    const inField = ae && ae.closest && ae.closest('input, textarea, [contenteditable]') && ae !== activeEl;
+    if (phase === 'writing' && ae !== activeEl && !inField &&
+        !document.body.classList.contains('reviewing')) focusActiveEnd();
   });
 
   window.addEventListener('mousedown', (e) => {
@@ -2685,25 +3361,15 @@
   document.getElementById('hintSend').addEventListener('click', () => sendFeedback());
   document.getElementById('hintCancel').addEventListener('click', () => exitFeedbackMode(false));
 
-  // editable page: click or tap a committed line to put the cursor right there
+  // clicking the page drops focus onto the native live line (committed lines are
+  // locked static text; the OS owns the caret in the active line)
   feed.addEventListener('click', (e) => {
-    if (!settings.editable || frozen || phase !== 'writing' || quotePlaying) return;
-    const lineEl = e.target.closest ? e.target.closest('.line') : null;
-    if (!lineEl || lineEl.parentElement !== feed) return;
-    const idx = Array.prototype.indexOf.call(feed.children, lineEl);
-    if (idx < 0) return;
-    if (idx >= locked.length) { if (cursor) exitOverstrike(); return; }   // the writing line
-    let col = locked[idx].length;
-    const chs = lineEl.querySelectorAll('.ch');
-    for (let k = 0; k < chs.length; k++) {
-      const r = chs[k].getBoundingClientRect();
-      if (r.width && e.clientX < r.left + r.width / 2) { col = k; break; }
-    }
-    const prev = cursor ? cursor.line : null;
-    cursor = { line: idx, col: Math.max(markerLen(idx), Math.min(col, locked[idx].length)) };
-    stage.classList.add('overstriking');
-    if (prev !== null && prev !== idx) renderLockedLine(prev);
-    renderLockedLine(idx); layout();
+    if (editActive()) { editSurface.focus(); return; }   // native surface owns focus in editable mode
+    if (frozen || phase !== 'writing' || quotePlaying) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;                                // don't clear a live selection
+    if (e.target.closest && e.target.closest('.active-line')) return;   // already in the live line
+    focusActiveEnd();
   });
 
   /* ================= iOS (the iPhone app) ================= */
@@ -2712,7 +3378,9 @@
   // into the same paths the desktop keydown handler uses, and the visual
   // viewport drives the strike point so the page sits above the keys.
   const isIOS = !!(window.typeAPI && window.typeAPI.isIOS);
-  let mobileInput = null;
+  let mobileInput = null;          // legacy; the native contenteditable replaced the hidden field
+  let resetMobileField = null;
+  let typeHaptic = null;           // setupIOS wires this so the live line can buzz on type/commit
   if (isIOS) (function setupIOS() {
     const dbg = (m) => { if (window.typeAPI.debug && window.typeAPI.log) window.typeAPI.log(m); };
     dbg('=== launch v' + (window.typeAPI.version || '?') + ' at ' + new Date().toISOString());
@@ -2725,13 +3393,29 @@
       if (seps.length) seps[seps.length - 1].remove();
       // the wordmark sits center-bottom as the tap-to-type landmark; taps
       // pass straight through it onto the keyboard field underneath
+      // the bottom-center landmark is a pull-up bar: tap (or swipe up on the
+      // page) to lift the kept drawer. The brand only appears in the intro now.
       const mark = document.createElement('span');
-      mark.className = 'hint type-mark-hint';
-      mark.setAttribute('aria-hidden', 'true');
-      mark.innerHTML = 'type<span class="period">.</span>';
+      mark.className = 'hint kept-pull';
+      mark.setAttribute('role', 'button');
+      mark.setAttribute('aria-label', 'kept pages');
+      mark.innerHTML = '<span class="pull-bar"></span>';
       hn.insertBefore(mark, document.getElementById('hintBurn'));
+      mark.addEventListener('click', () => Kept.open());
+      // it's a drawer handle: tap OR pull up on the bar to open kept
+      let pullY = null;
+      mark.addEventListener('touchstart', (e) => { pullY = e.touches[0].clientY; }, { passive: true });
+      mark.addEventListener('touchmove', (e) => {
+        if (pullY == null) return;
+        if (pullY - e.touches[0].clientY > 24) { pullY = null; Kept.open(); }   // a short upward pull lifts it
+      }, { passive: true });
+      mark.addEventListener('touchend', () => { pullY = null; }, { passive: true });
       hintSettings.classList.add('ios-settings');
-      hintSettings.innerHTML = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-label="settings"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+      // settings is a hamburger now (per the kept-notes handoff), matching the
+      // kept-screen header; opens the same settings panel.
+      // three lines, big→small top to bottom, all anchored at the RIGHT margin —
+      // a ragged left edge. leans typewriter, not a generic hamburger.
+      hintSettings.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-label="settings"><path d="M4 7h16M10 12h10M14 17h6"/></svg>';
       document.body.appendChild(hintSettings);
     })();
     const mv = document.querySelector('meta[name="viewport"]');
@@ -2744,164 +3428,51 @@
       document.documentElement.style.setProperty('--vvt', (vv ? vv.offsetTop : 0) + 'px');
       // keyboard up = visual viewport noticeably shorter than the layout one
       document.body.classList.toggle('kb-up', !!vv && vv.height < window.innerHeight - 90);
+      if (window.scrollX || window.scrollY) window.scrollTo(0, 0);   // undo any keyboard-driven document scroll
       computeCols(); reflowLocked(); layout();
     };
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', syncViewport);
       window.visualViewport.addEventListener('scroll', syncViewport);
     }
+    // The keyboard's "scroll the caret into view" can push the whole document
+    // up, dragging the fixed corner glyphs (settings / share) off the top. The
+    // platen keeps the caret visible on its own, so the page itself must never
+    // scroll — snap any stray scroll straight back to the top.
+    window.addEventListener('scroll', () => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); }, { passive: true });
     syncViewport();
 
-    // The invisible field keeps the tail of the line you're typing, so iOS
-    // autocorrect, spell check, QuickPath and dictation have real text to
-    // work against. The page replays whatever changes in the field — an OS
-    // correction lands as backspaces + the fixed word, same as typing it.
-    mobileInput = document.createElement('input');
-    mobileInput.id = 'mobileInput';
-    mobileInput.type = 'text';
-    mobileInput.setAttribute('autocomplete', 'off');
-    mobileInput.setAttribute('autocorrect', 'on');
-    mobileInput.setAttribute('autocapitalize', 'sentences');
-    mobileInput.setAttribute('spellcheck', 'true');
-    mobileInput.setAttribute('enterkeyhint', 'enter');
-    document.body.appendChild(mobileInput);
-    const PREFIX = '\u200b';            // zero-width space: never-empty head: ⌫ always changes the value
-    let fieldLast = PREFIX;
-    const caretToEnd = () => { try { mobileInput.setSelectionRange(mobileInput.value.length, mobileInput.value.length); } catch (err) {} };
-    const fieldReset = (text) => {
-      mobileInput.value = fieldLast = PREFIX + (text || '');
-      caretToEnd();
-    };
-    const fieldTrim = () => {                // a line's tail is plenty of context — don't grow forever
-      if (mobileInput.value.length > 90) fieldReset(mobileInput.value.slice(-45).replace(/^\S*\s/, '').replace(/\u200b/g, ''));
-    };
-    fieldReset('');
+    // The live line is a real native contenteditable (built in renderActive).
+    // iOS owns its text, caret, selection, autocorrect, predictive, dictation,
+    // QuickPath and undo — no hidden field, no diff replay. We only summon the
+    // keyboard by focusing the live line on a tap, and pass haptics to it.
+    typeHaptic = (kind) => { if (settings.haptics && window.typeAPI.haptic) window.typeAPI.haptic(kind); };
 
-    // the input covers the page, so a tap on the paper is a real tap on a
-    // text field — iOS focuses it and presents the keyboard natively. Taps
-    // pass through to whatever sits underneath (lines for cursor placement,
-    // the intro skip, the quote ×) by re-dispatching the click below the
-    // input. Controls (hints, settings, update) layer above it and never
-    // reach this handler.
-    mobileInput.addEventListener('click', (e) => {
-      mobileInput.style.pointerEvents = 'none';
-      const under = document.elementFromPoint(e.clientX, e.clientY);
-      mobileInput.style.pointerEvents = '';
-      if (under && under !== mobileInput) {
-        under.dispatchEvent(new MouseEvent('click', { clientX: e.clientX, clientY: e.clientY, bubbles: true }));
+    // a tap on the paper starts/skips the intro, finishes a typing quote, then
+    // focuses the live line so the keyboard comes up. Controls (hints, settings,
+    // kept drawer) sit above and handle their own taps.
+    stage.addEventListener('click', (e) => {
+      if (e.target.closest && (e.target.closest('.hint') || e.target.closest('#settings') ||
+          e.target.closest('.kept-screen') || e.target.closest('#hintsFeedback') ||
+          e.target.closest('#quoteX') || e.target.closest('#quoteShare'))) return;
+      // a selection is live (you long-pressed to select / copy) — don't touch
+      // focus or roll the page; that would clear it. Let iOS own it.
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      // editable: the native textarea owns caret placement on its own taps; a tap
+      // in the side margin just raises its keyboard. Never focus the hidden line.
+      if (editActive()) { if (e.target !== editSurface) editSurface.focus(); return; }
+      if (phase === 'intro') { if (!introPlayed) playIntro(); else skipIntro(); return; }
+      if (quotePlaying && quoteSkip) quoteSkip();
+      if (phase === 'writing' && !frozen && !feedbackMode) {
+        unlockAudio();
+        // tapping inside the live line: let the OS place the caret where you
+        // tapped (essential for editing). Only jump-to-end when tapping the
+        // empty page around it.
+        if (e.target.closest && e.target.closest('.active-line')) { layout(); return; }
+        focusActiveEnd();
       }
-      dbg('tap: focused=' + (document.activeElement === mobileInput));
     });
-
-    const skipOrPlayIntro = () => {
-      if (phase !== 'intro') return false;
-      if (!introPlayed) playIntro(); else skipIntro();
-      return true;
-    };
-    let quiet = false;                 // true while reconciling a correction — no haptic machine-gun
-    const haptic = (kind) => { if (!quiet && settings.haptics && window.typeAPI.haptic) window.typeAPI.haptic(kind); };
-    const touchChar = (c) => {
-      if (skipOrPlayIntro()) { dbg('drop (intro) ' + JSON.stringify(c)); return; }
-      if (frozen) { dbg('drop (frozen) ' + JSON.stringify(c)); return; }
-      haptic('key');
-      if (cursor) {
-        if (settings.editable) editInsert(c);
-        else if (c === 'x' || c === 'X') overstrikeAt(cursor.line, cursor.col);
-        return;
-      }
-      if (quotePlaying && quoteSkip) quoteSkip();
-      const lockedBefore = locked.length;
-      pushChar(c); thock(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
-      // the line wrapped: the field must mirror only the NEW line, or a
-      // later correction would pop text that already rolled up and locked
-      if (locked.length !== lockedBefore) fieldReset(current);
-      dbg('typed ' + JSON.stringify(c) + ' current=' + JSON.stringify(current));
-    };
-    const touchEnter = () => {
-      if (skipOrPlayIntro() || frozen) return;
-      haptic('return');
-      if (cursor) { exitOverstrike(); return; }
-      if (quotePlaying && quoteSkip) quoteSkip();
-      commitLine(); markTyping(); nudgeHints(); resetSmolder(); persistDraft(); ensureClock(); updateMeter();
-      fieldReset('');                  // fresh line, fresh autocorrect context
-    };
-    const touchBackspace = (word) => {
-      if (skipOrPlayIntro() || frozen) return;
-      haptic('key');
-      if (cursor) { if (settings.editable) editDelete(); else overstrikeScrub(); return; }
-      if (quotePlaying && quoteSkip) quoteSkip();
-      if (current.length > 0) {
-        current = word ? current.replace(/\S+\s*$/, '') : current.slice(0, -1);
-        renderActive(); thock();
-      }
-      markTyping(); nudgeHints(); resetSmolder(); persistDraft(); updateMeter();
-    };
-
-    // Read what the keyboard actually did to the field, not what an event
-    // claims it will do: diff the value against what it held last time and
-    // replay the difference onto the page. Autocorrect fixing "teh" → "the"
-    // arrives as 3 deletions + "the" — identical to a person retyping it.
-    // Survives every input engine: taps, QuickPath, dictation, hardware keys.
-    const handleFieldChange = () => {
-      const v = mobileInput.value;
-      if (v === fieldLast) return;
-      unlockAudio();
-      const oldV = fieldLast;
-      fieldLast = v;
-      const strip = (str) => str.replace(/\u200b/g, '');
-      if (!cursor && v.startsWith(oldV)) {
-        // pure append — the ordinary keystroke (or several at once)
-        dbg('append ' + JSON.stringify(strip(v.slice(oldV.length))));
-        for (const c of v.slice(oldV.length)) { if (c === '\n') touchEnter(); else touchChar(c); }
-      } else if (!cursor && oldV.startsWith(v)) {
-        // pure truncation — backspaces off the end
-        dbg('truncate ' + (oldV.length - v.length));
-        for (let i = 0; i < oldV.length - v.length; i++) touchBackspace(false);
-      } else if (!cursor) {
-        // a mid-string edit: autocorrect or a QuickType pick rewrote part of
-        // the word in place ("tou" → "you" swaps the t). End-of-line replays
-        // garble those, so rebuild the tail: pop what the field used to
-        // mirror, retype its new text. Wrap-aware; haptics stay quiet and
-        // the double-space trick is off so the retype is byte-faithful.
-        const oldTail = strip(oldV), newTail = strip(v);
-        dbg('reconcile ' + JSON.stringify(oldTail) + ' -> ' + JSON.stringify(newTail));
-        const pop = Math.min(oldTail.length, current.length);
-        quiet = true; pasting = true;
-        try {
-          if (pop > 0) { current = current.slice(0, current.length - pop); renderActive(); }
-          for (const c of newTail) { if (c === '\n') touchEnter(); else touchChar(c); }
-        } finally { quiet = false; pasting = false; }
-        persistDraft(); updateMeter();
-      } else {
-        // cursor parked up the page (editable / overstrike): plain end-ops
-        let p = 0;
-        while (p < v.length && p < oldV.length && v[p] === oldV[p]) p++;
-        let s = 0;
-        while (s < v.length - p && s < oldV.length - p &&
-               v[v.length - 1 - s] === oldV[oldV.length - 1 - s]) s++;
-        for (let i = 0; i < oldV.length - p - s; i++) touchBackspace(false);
-        for (const c of v.slice(p, v.length - s)) touchChar(c);
-      }
-      if (!mobileInput.value.startsWith(PREFIX)) fieldReset(strip(mobileInput.value));  // ⌫ ate the head — restore it
-      fieldTrim();
-    };
-    mobileInput.addEventListener('input', handleFieldChange);
-    // Enter doesn't change a single-line field — the window keydown handler
-    // commits the page line; the field just starts its context fresh
-    mobileInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') setTimeout(() => fieldReset(''), 0);
-    });
-    // paste lands via the window-level paste handler; resync the field after
-    mobileInput.addEventListener('paste', () => { setTimeout(() => fieldReset(current), 0); });
-    // the page is append-only — a stray caret move would desync the replay
-    mobileInput.addEventListener('focus', caretToEnd);
-    if (window.typeAPI && window.typeAPI.debug && window.typeAPI.log) {
-      ['focus', 'blur', 'keydown', 'beforeinput', 'compositionstart', 'compositionend'].forEach(ev => {
-        mobileInput.addEventListener(ev, (e) => {
-          window.typeAPI.log(ev + (e.key ? ' key=' + e.key : '') + (e.inputType ? ' type=' + e.inputType : '') + (typeof e.data === 'string' ? ' data=' + JSON.stringify(e.data) : ''));
-        });
-      });
-    }
 
     // Phones interrupt — a notification or app switch is not "stopping".
     // The smolder clock only runs while type is actually in front of you,
@@ -2917,40 +3488,80 @@
       if (document.hidden) coolSmolder(); else scheduleSmolder();
     });
 
-    // swipe down on the paper tucks the keyboard away to sit back and read;
-    // any tap brings it right back
+    // swipe down on the paper tucks the keyboard away to sit back and read.
+    // (Kept opens from the visible pull-bar tap at the bottom.) We ignore swipes
+    // that START in the bottom ~110px — that band is iOS's home-indicator swipe.
     let swipeStart = null;
-    mobileInput.addEventListener('touchstart', (e) => {
+    stage.addEventListener('touchstart', (e) => {
       swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     }, { passive: true });
-    mobileInput.addEventListener('touchmove', (e) => {
+    const dropKeyboard = () => { if (activeEl) activeEl.blur(); if (editSurface) editSurface.blur(); };
+    stage.addEventListener('touchmove', (e) => {
       if (!swipeStart) return;
+      // don't fire while frozen/feedback/intro, and never hijack a text-selection
+      // drag on the live line (let the OS handle selecting words)
+      if (frozen || feedbackMode || phase !== 'writing') { swipeStart = null; return; }
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) { swipeStart = null; return; }
       const dy = e.touches[0].clientY - swipeStart.y;
-      const dx = Math.abs(e.touches[0].clientX - swipeStart.x);
-      if (dy > 70 && dx < 50) { swipeStart = null; mobileInput.blur(); }
+      const dx = e.touches[0].clientX - swipeStart.x;
+      // left-to-right swipe anywhere: bring the page back over the settings rail if
+      // it's open, otherwise tuck the keyboard away. Horizontal so it works in
+      // editable too (the textarea owns vertical scroll there).
+      if (dx > 70 && Math.abs(dy) < 45) {
+        swipeStart = null;
+        if (document.body.classList.contains('settings-open')) settingsEl.hidden = true;
+        else dropKeyboard();
+        return;
+      }
+      // swipe down also dismisses on the locked page (in editable the textarea scrolls)
+      if (!editActive() && dy > 70 && Math.abs(dx) < 50) { swipeStart = null; dropKeyboard(); }
     }, { passive: true });
+
+    // swipe IN from the right edge → slide out the settings rail (the way I keep
+    // reaching for it). A leftward drag that starts in the right ~24px opens it;
+    // an open rail closes on a rightward drag, a scrim tap, or the hamburger.
+    let edgeStart = null;
+    window.addEventListener('touchstart', (e) => {
+      const t = e.touches[0];
+      edgeStart = (t.clientX >= window.innerWidth - 24) ? { x: t.clientX, y: t.clientY } : null;
+    }, { passive: true });
+    window.addEventListener('touchmove', (e) => {
+      if (!edgeStart) return;
+      const t = e.touches[0];
+      const dx = t.clientX - edgeStart.x, dy = Math.abs(t.clientY - edgeStart.y);
+      if (dx < -45 && dy < 40) { edgeStart = null; if (settingsEl.hidden) { settingsEl.hidden = false; hints.classList.remove('dim'); if (activeEl) activeEl.blur(); if (editSurface) editSurface.blur(); } }
+    }, { passive: true });
+    window.addEventListener('touchend', () => { edgeStart = null; }, { passive: true });
+    // swipe right on the open rail to close it
+    let railStart = null;
+    settingsEl.addEventListener('touchstart', (e) => { railStart = e.touches[0].clientX; }, { passive: true });
+    settingsEl.addEventListener('touchmove', (e) => {
+      if (railStart == null) return;
+      if (e.touches[0].clientX - railStart > 60) { railStart = null; settingsEl.hidden = true; }
+    }, { passive: true });
+    settingsEl.addEventListener('touchend', () => { railStart = null; }, { passive: true });
 
     // keep and burn land with weight you can feel
     document.getElementById('hintKeep').addEventListener('click', () => {
-      if (!frozen && phase === 'writing' && !feedbackMode) haptic('keep');
+      if (!frozen && phase === 'writing' && !feedbackMode && typeHaptic) typeHaptic('keep');
     });
     document.getElementById('hintBurn').addEventListener('click', () => {
-      if (!frozen && phase === 'writing' && !feedbackMode) haptic('burn');
+      if (!frozen && phase === 'writing' && !feedbackMode && typeHaptic) typeHaptic('burn');
     });
 
     // tell the shell the paper color, so the status bar and the next
     // launch's backdrop match the theme instead of flashing white
     const syncShellTheme = () => {
       if (!window.typeAPI.setShellTheme) return;
-      const bg = getComputedStyle(document.body).getPropertyValue('--paper').trim();
-      window.typeAPI.setShellTheme({ bg, dark: !!(settings.dark || settings.amber) });
+      const cs = getComputedStyle(document.body);
+      const bg = cs.getPropertyValue('--paper').trim();
+      const accent = cs.getPropertyValue('--accent').trim();   // drives the native selection highlight + handles + caret
+      window.typeAPI.setShellTheme({ bg, dark: !!(settings.dark || settings.amber), accent });
     };
     themePick.addEventListener('click', () => setTimeout(syncShellTheme, 0));
     syncShellTheme();
 
-    // a recovered draft restores after this block runs — once it has, the
-    // field mirrors the restored line so corrections have their context
-    setTimeout(() => { if (current) fieldReset(current); }, 120);
 
     // the shell reports where a kept page landed; the stamp passes it on
     window.__typeSaved = (dest) => {
@@ -2962,7 +3573,7 @@
     // it looked at the shake (the shell captures before the sheet covers it)
     window.__typeShake = (shot) => {
       if (feedbackMode || frozen || phase !== 'writing') return;
-      haptic('return');
+      if (typeHaptic) typeHaptic('return');
       pendingShot = shot || null;
       enterFeedbackMode();
       if (pendingShot) feedbackLabel.textContent = 'feedback · screenshot attached';
@@ -2988,8 +3599,482 @@
       }
     });
     const saveTip = document.getElementById('saveTitle').querySelector('.tip');
-    if (saveTip) saveTip.textContent = 'Pages land in iCloud Drive → type by default. Choose any folder the Files app can reach instead — your Obsidian vault, the folder your Mac saves to, anywhere. Plain markdown either way.';
+    if (saveTip) saveTip.textContent = 'Kept pages are plain .md files. By default they go to a “type” folder in iCloud Drive — open it in the Files app, and it syncs to your Mac automatically. Choose any other folder the Files app can reach (your Obsidian vault, etc.). No iCloud? They save on this iPhone and stay here.';
   })();
+
+  /* ===================== KEPT NOTES (review) =====================
+     The roll: kept pages on a 3D carousel; drag to scroll, tap to open, the
+     bottom red line scrubs the whole archive. Reads pages from the native
+     bridge (typeAPI.listNotes / readNote); falls back to sample data in a
+     plain browser so the screen is testable without the app shell. Burn is
+     wired in a later pass. Ported from the design handoff. */
+  const Kept = (function () {
+    const keptScreen = document.getElementById('keptScreen');
+    if (!keptScreen) return { open(){}, close(){}, toggle(){} };
+    const rollStage = document.getElementById('rollStage');
+    const rollPlane = document.getElementById('rollPlane');
+    const rollWrap  = document.getElementById('rollWrap');
+    const bottomLine = document.getElementById('bottomLine');
+    const blMark = document.getElementById('blMark');
+    const blDate = document.getElementById('blDate');
+    const searchBox = document.getElementById('keptSearch');
+    const searchInput = document.getElementById('keptSearchInput');
+    const searchCount = document.getElementById('keptSearchCount');
+
+    const PITCH = 300, FRICTION = 0.935, SNAP = 0.18, CULL = 640;
+    const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const fullStamp = (d) => String(d.getDate()).padStart(2,'0') + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+    const monthMark = (d) => MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+    const esc = (s) => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    const countWords = (t) => (String(t).match(/\S+/g) || []).length;
+
+    const SAMPLE = [
+      { filename:'s1', dateISO:'2026-06-14', kept:'14 June 2026', words:84,
+        body:"The unlived life within us is the one Resistance guards.\nEvery morning the same negotiation — sit down, or invent a reason not to.\n\nToday I sat down." },
+      { filename:'s2', dateISO:'2026-06-12', kept:'12 June 2026', words:212,
+        body:"Targeting in the second campaign was off. Gregory flagged it on the Next call: the audience overlapped the first set by almost half.\n\nSplit them. Re-run Thursday." },
+      { filename:'s3', dateISO:'2026-06-09', kept:'9 June 2026', words:139,
+        body:"Morning pages. Three things before the noise starts and the day decides for me what it is going to be about." },
+      { filename:'s4', dateISO:'2026-06-03', kept:'3 June 2026', words:56,
+        body:"A short one.\nKeep it or it's gone." },
+      { filename:'s5', dateISO:'2026-05-28', kept:'28 May 2026', words:301,
+        body:"The whole point is you can't go back and fix the line. You commit it the moment you move on.\n\nThat constraint is the feature, not the bug." },
+      { filename:'s6', dateISO:'2026-05-21', kept:'21 May 2026', words:97,
+        body:"Notes from the walk. The idea arrived between the third and fourth block, the way they always do once I stop reaching for it." },
+    ];
+
+    let archive = [], view = [], pageEls = [];
+    let pos = 0, vel = 0, raf = null, settle = false, dragging = false, centerCur = -1, lastSpeedPos = 0;
+
+    // parse 'YYYY-MM-DD' as a LOCAL date — new Date('2026-06-14') is UTC midnight,
+    // which renders as the 13th in western timezones.
+    const parseDate = (s) => {
+      if (s && /^\d{4}-\d{2}-\d{2}/.test(s)) { const p = s.slice(0,10).split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
+      return s ? new Date(s) : new Date();
+    };
+    const normalize = (n) => {
+      const dt = parseDate(n.dateISO || n.date);
+      return { filename: n.filename, dt, kept: n.kept || '', words: n.words || countWords(n.body || ''),
+               body: (n.body || '').replace(/\s+$/,''), month: monthMark(dt) };
+    };
+
+    async function loadArchive() {
+      try {
+        if (window.typeAPI && window.typeAPI.listNotes) {
+          const list = await window.typeAPI.listNotes(settings.saveDir || null);   // dir used on desktop; iOS ignores it
+          archive = (list || []).map(normalize);
+        } else {
+          archive = SAMPLE.map(normalize);
+        }
+      } catch (e) { archive = []; }
+    }
+
+    function currentView() {
+      const q = (searchInput.value || '').trim().toLowerCase();
+      if (!q) return archive;
+      return archive.filter(n => (n.body + ' ' + fullStamp(n.dt) + ' ' + n.month).toLowerCase().includes(q));
+    }
+
+    function buildPages() {
+      view = currentView();
+      rollPlane.innerHTML = '';
+      pageEls = [];
+      if (view.length === 0) {
+        const q = (searchInput.value || '').trim();
+        const wrap = document.createElement('div'); wrap.className = 'empty-page';
+        const line = document.createElement('div'); line.className = 'empty-line';
+        line.innerHTML = q ? "no kept page matches.<br><span>try another word or date.</span>"
+                           : "nothing kept yet.<br><span>the pages you keep roll onto here.</span>";
+        wrap.appendChild(line); rollPlane.appendChild(wrap);
+        blMark.style.display = 'none'; blDate.style.display = 'none';
+        return;
+      }
+      blMark.style.display = ''; blDate.style.display = '';
+      view.forEach((n, i) => {
+        const el = document.createElement('div');
+        el.className = 'page'; el.dataset.idx = i;
+        const lines = n.body.split('\n');
+        el.innerHTML =
+          `<div class="page-stamp">${esc(fullStamp(n.dt))}</div>` +
+          `<div class="page-rule"></div>` +
+          `<div class="page-body">${lines.map(l => `<p>${esc(l) || '&nbsp;'}</p>`).join('')}</div>` +
+          `<div class="ember-hold" aria-hidden="true"></div><div class="ember-sweep" aria-hidden="true"></div><div class="spark-host" aria-hidden="true"></div>`;
+        rollPlane.appendChild(el);
+        pageEls[i] = el;
+      });
+    }
+
+    function pageCurl(dx) {
+      const a = Math.abs(dx);
+      const sc = 1 - Math.min(a / 1500, 0.26);
+      const ry = Math.max(-26, Math.min(26, -dx * 0.05));
+      const tz = -Math.min(a * 0.34, 320);
+      const op = Math.max(0.16, 1 - Math.min(a / 720, 0.84));
+      return { t: `translate(-50%,-50%) translateX(${dx}px) translateZ(${tz}px) rotateY(${ry}deg) scale(${sc})`,
+               o: op, z: 1000 - Math.round(a) };
+    }
+
+    function haptic() { try { if (settings.haptics && window.typeAPI && window.typeAPI.haptic) window.typeAPI.haptic('key'); } catch (e) {} }
+
+    function applyLayout() {
+      const N = view.length;
+      for (let i = 0; i < N; i++) {
+        const el = pageEls[i]; if (!el) continue;
+        const dx = (i - pos) * PITCH;
+        if (Math.abs(dx) > CULL) { el.style.display = 'none'; continue; }
+        el.style.display = '';
+        const c = pageCurl(dx);
+        el.style.transform = c.t; el.style.opacity = c.o; el.style.zIndex = c.z;
+        el.classList.toggle('is-focus', Math.abs(dx) < PITCH * 0.5);
+      }
+      if (N > 0) {
+        const frac = N > 1 ? Math.max(0, Math.min(1, pos / (N - 1))) : 0;   // newest left, oldest right
+        const leftPct = (4 + frac * 92) + '%';
+        blMark.style.left = leftPct; blDate.style.left = leftPct;
+        const ci = Math.max(0, Math.min(N - 1, Math.round(pos)));
+        if (ci !== centerCur) { if (dragging || raf != null) haptic(); centerCur = ci; }
+        const speed = Math.abs(pos - lastSpeedPos); lastSpeedPos = pos;
+        const moving = dragging || (raf != null && !settle);
+        const note = view[ci];
+        if (note) {
+          const fast = speed > 0.5;
+          blDate.textContent = fast ? String(note.dt.getFullYear()) : note.month;
+          blDate.classList.toggle('fast', fast);
+          blDate.style.opacity = moving ? 0.92 : 0.4;
+        }
+      }
+    }
+
+    function tick() {
+      if (dragging) { raf = requestAnimationFrame(tick); return; }
+      const N = view.length;
+      if (!settle) {
+        pos += vel; vel *= FRICTION;
+        if (pos < 0) { pos += (0 - pos) * 0.25; vel *= 0.5; }
+        if (pos > N - 1) { pos += (N - 1 - pos) * 0.25; vel *= 0.5; }
+        if (Math.abs(vel) < 0.0016) settle = true;
+      } else {
+        const target = Math.max(0, Math.min(N - 1, Math.round(pos)));
+        pos += (target - pos) * SNAP;
+        if (Math.abs(target - pos) < 0.001) { pos = target; applyLayout(); raf = null; return; }
+      }
+      applyLayout();
+      raf = requestAnimationFrame(tick);
+    }
+    function startLoop() { if (raf == null) raf = requestAnimationFrame(tick); }
+    function glideTo(target) {
+      cancelAnimationFrame(raf); raf = null;
+      const step = () => {
+        pos += (target - pos) * 0.2; applyLayout();
+        if (Math.abs(target - pos) < 0.004) { pos = target; applyLayout(); return; }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+
+    // ----- drag the roll: scroll + tap-to-open / center -----
+    const drag = { active: false };
+    rollStage.addEventListener('pointerdown', (e) => {
+      if (!searchBox.hidden && document.activeElement === searchInput) searchInput.blur();   // touch the roll → drop the search keyboard
+      if (keptScreen.querySelector('.opened') || keptScreen.querySelector('.card-menu-scrim')) return;
+      cancelAnimationFrame(raf); raf = null; settle = false; dragging = true;
+      const t = e.target.closest('[data-idx]');
+      drag.active = true; drag.startX = e.clientX; drag.startPos = pos; drag.lastX = e.clientX;
+      drag.lastT = performance.now(); drag.moved = 0; drag.idx = t ? +t.dataset.idx : -1; drag.vx = 0;
+      drag.holdFired = false;
+      clearTimeout(drag.holdTimer);
+      // press and hold the focused card → its context menu (read · share · burn)
+      if (drag.idx >= 0 && drag.idx === Math.round(pos)) {
+        drag.holdTimer = setTimeout(() => {
+          drag.holdFired = true; drag.active = false; dragging = false;
+          showCardMenu(view[drag.idx]);
+        }, 480);
+      }
+      try { rollStage.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    rollStage.addEventListener('pointermove', (e) => {
+      if (!drag.active) return;
+      const dx = e.clientX - drag.startX;
+      drag.moved = Math.max(drag.moved, Math.abs(dx));
+      if (drag.moved > 7) clearTimeout(drag.holdTimer);   // a scroll, not a hold
+      pos = drag.startPos - dx / PITCH;
+      const now = performance.now();
+      drag.vx = (e.clientX - drag.lastX) / Math.max(1, now - drag.lastT);
+      drag.lastX = e.clientX; drag.lastT = now;
+      applyLayout();
+    });
+    function endDrag() {
+      clearTimeout(drag.holdTimer);
+      if (drag.holdFired) { drag.active = false; dragging = false; return; }   // the menu took it
+      if (!drag.active) return;
+      drag.active = false; dragging = false;
+      let v = -(drag.vx || 0) * 16 / PITCH;
+      if (Math.abs(v) > 0.4) v *= 1.7;
+      vel = v; settle = false; startLoop();
+      if (drag.moved < 7) {
+        const ci = Math.round(pos), i = drag.idx;
+        if (i >= 0 && i === ci) { vel = 0; openPage(view[i]); }
+        else if (i >= 0) { vel = 0; glideTo(i); }
+      }
+    }
+    rollStage.addEventListener('pointerup', endDrag);
+    rollStage.addEventListener('pointercancel', endDrag);
+    rollStage.addEventListener('wheel', (e) => {
+      if (keptScreen.querySelector('.opened')) return;
+      e.preventDefault(); cancelAnimationFrame(raf); raf = null; settle = false;
+      pos += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) / PITCH;
+      applyLayout();
+      clearTimeout(rollStage._wt); rollStage._wt = setTimeout(() => { settle = true; startLoop(); }, 120);
+    }, { passive: false });
+
+    // ----- the bottom line: scrub the whole archive -----
+    const ldrag = { active: false };
+    bottomLine.addEventListener('pointerdown', (e) => {
+      if (keptScreen.querySelector('.opened')) return;
+      cancelAnimationFrame(raf); raf = null; settle = false; dragging = true;
+      ldrag.active = true; ldrag.startX = e.clientX; ldrag.startPos = pos;
+      ldrag.w = bottomLine.getBoundingClientRect().width;
+      try { bottomLine.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    bottomLine.addEventListener('pointermove', (e) => {
+      if (!ldrag.active) return;
+      const dx = e.clientX - ldrag.startX;
+      const travel = (ldrag.w || 280) * 0.88;
+      pos = ldrag.startPos + (dx / travel) * Math.max(1, view.length - 1);
+      applyLayout();
+    });
+    function endLine() {
+      if (!ldrag.active) return;
+      ldrag.active = false; dragging = false; vel = 0; settle = true; startLoop();
+    }
+    bottomLine.addEventListener('pointerup', endLine);
+    bottomLine.addEventListener('pointercancel', endLine);
+
+    // ----- opened page (tap to read) -----
+    async function ensureBody(note) {
+      if (note.body) return;
+      try { if (window.typeAPI && window.typeAPI.readNote) note.body = (await window.typeAPI.readNote(note.filename, settings.saveDir || null) || '').replace(/\s+$/,''); } catch (e) {}
+    }
+    async function openPage(note) {
+      if (!note) return;
+      searchInput.blur();                 // reading a page drops the search keyboard
+      if (!searchBox.hidden) closeSearch();
+      await ensureBody(note);
+      let idx = view.indexOf(note);
+      const cur = () => view[idx];
+      const o = document.createElement('div'); o.className = 'opened';
+      o.innerHTML =
+        `<div class="opened-sheet">` +
+          `<div class="opened-grab" aria-hidden="true"></div>` +
+          `<div class="opened-scroll"></div>` +
+          `<div class="opened-ember" aria-hidden="true"></div><div class="spark-host" aria-hidden="true"></div>` +
+        `</div>` +
+        `<div class="opened-foot">` +
+          `<button class="of-btn" type="button" data-act="back">back</button>` +
+          `<span class="of-sep"></span>` +
+          `<button class="of-btn" type="button" data-act="share">share</button>` +
+          `<span class="of-sep"></span>` +
+          `<button class="of-btn burn" type="button" data-act="burn">burn<span class="of-fill"></span></button>` +
+        `</div>`;
+      keptScreen.appendChild(o);
+      const scroll = o.querySelector('.opened-scroll');
+      const fill = (n, dir) => {
+        const lines = n.body.split('\n');
+        scroll.innerHTML = `<div class="page-stamp">${esc(fullStamp(n.dt))}</div><div class="page-rule"></div>` +
+          `<div class="opened-body">${lines.map(l => `<p>${esc(l) || '&nbsp;'}</p>`).join('')}` +
+          `<div class="page-meta">${n.words} words · kept ${esc(n.kept || fullStamp(n.dt).toLowerCase())}</div></div>`;
+        scroll.scrollTop = 0;
+        if (dir) { scroll.style.animation = 'none'; void scroll.offsetWidth; scroll.style.setProperty('--ox', (dir > 0 ? 30 : -30) + 'px'); scroll.style.animation = 'opSlide .28s ease'; }
+      };
+      fill(note, 0);
+      const close = () => { o.classList.add('closing'); setTimeout(() => o.remove(), 240); };
+      async function nav(d) {
+        const ni = Math.max(0, Math.min(view.length - 1, idx + d));
+        if (ni === idx) return;
+        idx = ni; await ensureBody(view[idx]); fill(view[idx], d);
+      }
+      o.querySelector('[data-act="back"]').addEventListener('click', close);
+      o.querySelector('[data-act="share"]').addEventListener('click', () => {
+        const n = cur();
+        if (window.typeAPI && window.typeAPI.shareNote) window.typeAPI.shareNote({ filename: n.filename, text: n.body, dir: settings.saveDir || null });
+        else if (navigator.share) { try { navigator.share({ text: n.body }); } catch (e) {} }
+      });
+
+      // burn: press and hold to confirm, then it ignites and the .md is deleted
+      const burnBtn = o.querySelector('[data-act="burn"]');
+      const fillBar = burnBtn.querySelector('.of-fill');
+      const HOLD = 820;
+      let burnTimer = null, igniting = false;
+      const armOff = () => { clearTimeout(burnTimer); if (!igniting) { burnBtn.classList.remove('arming'); fillBar.style.transition = 'opacity .2s ease'; fillBar.style.transform = 'scaleX(0)'; } };
+      const ignite = () => {
+        igniting = true;
+        const n = cur();
+        if (settings.haptics && window.typeAPI && window.typeAPI.haptic) window.typeAPI.haptic('return');
+        const host = o.querySelector('.spark-host');
+        if (host) for (let i = 0; i < 18; i++) {
+          const s = document.createElement('i'); s.className = 'spark';
+          s.style.left = (10 + Math.random() * 80) + '%';
+          s.style.setProperty('--rise', '-' + (80 + Math.random() * 150) + 'px');
+          s.style.setProperty('--drift', ((Math.random() - 0.5) * 70) + 'px');
+          s.style.animationDelay = (Math.random() * 380) + 'ms';
+          host.appendChild(s);
+        }
+        o.classList.add('burning-open');
+        try { if (window.typeAPI && window.typeAPI.deleteNote) window.typeAPI.deleteNote(n.filename, settings.saveDir || null); } catch (e) {}
+        setTimeout(() => { archive = archive.filter(x => x.filename !== n.filename); o.remove(); rebuild(); }, 1350);
+      };
+      burnBtn.addEventListener('pointerdown', () => {
+        igniting = false; burnBtn.classList.add('arming');
+        fillBar.style.transition = 'none'; fillBar.style.transform = 'scaleX(0)';
+        requestAnimationFrame(() => { fillBar.style.transition = 'transform ' + HOLD + 'ms linear'; fillBar.style.transform = 'scaleX(1)'; });
+        burnTimer = setTimeout(ignite, HOLD);
+      });
+      burnBtn.addEventListener('pointerup', armOff);
+      burnBtn.addEventListener('pointerleave', armOff);
+      burnBtn.addEventListener('pointercancel', armOff);
+
+      // gestures: swipe left/right = next/previous kept page; swipe down (at the
+      // top) returns to the roll. Horizontal vs vertical is decided per-gesture.
+      let sx = null, sy = null, decided = null, topY = null;
+      o.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.opened-foot')) { sx = null; return; }
+        sx = e.clientX; sy = e.clientY; decided = null;
+        topY = scroll.scrollTop <= 0 ? e.clientY : null;
+      });
+      o.addEventListener('pointermove', (e) => {
+        if (sx === null) return;
+        const dx = e.clientX - sx, dy = e.clientY - sy;
+        if (!decided && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) decided = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+        if (decided === 'h' && Math.abs(dx) > 60) { const d = dx < 0 ? 1 : -1; sx = null; nav(d); return; }
+        if (decided === 'v') {
+          // dismiss on a downward pull once the content is at the top — even if
+          // you scrolled up to reach the top in the same motion (overscroll = exit).
+          if (scroll.scrollTop <= 0) { if (topY === null) topY = e.clientY; if (e.clientY - topY > 70) { sx = null; close(); } }
+          else { topY = null; }
+        }
+      });
+      o.addEventListener('pointerup', () => { sx = null; });
+    }
+
+    // ----- search -----
+    function rebuild() { buildPages(); pos = 0; vel = 0; settle = false; centerCur = -1; applyLayout(); }
+    document.getElementById('keptSearchBtn').addEventListener('click', () => {
+      searchBox.hidden = false; searchInput.value = ''; setTimeout(() => searchInput.focus(), 30);
+    });
+    document.getElementById('keptSearchClose').addEventListener('click', closeSearch);
+    function closeSearch() { searchInput.blur(); searchBox.hidden = true; searchInput.value = ''; searchCount.textContent = ''; rebuild(); }
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim();
+      rebuild();
+      searchCount.textContent = q ? String(view.length) : '';
+    });
+
+    // ----- header: grab handle → back to writing, hamburger → settings -----
+    document.getElementById('keptGrab').addEventListener('click', close);
+    const keptScrim = document.getElementById('keptScrim');
+    if (keptScrim) keptScrim.addEventListener('click', close);   // tap the peeking page to return
+    // settings isn't here — it lives on the writing screen's hamburger. The
+    // kept drawer keeps only search.
+
+    // ----- context menu: long-press a focused card -----
+    function closeCardMenu() { const m = keptScreen.querySelector('.card-menu-scrim'); if (m) m.remove(); }
+    function showCardMenu(note) {
+      if (!note) return;
+      closeCardMenu();
+      const scrim = document.createElement('div'); scrim.className = 'card-menu-scrim';
+      scrim.innerHTML = `<div class="card-menu">` +
+        `<button class="cm-btn" type="button" data-a="read">read</button>` +
+        `<button class="cm-btn" type="button" data-a="share">share</button>` +
+        `<button class="cm-btn burn" type="button" data-a="burn">burn</button>` +
+      `</div>`;
+      keptScreen.appendChild(scrim);
+      if (settings.haptics && window.typeAPI && window.typeAPI.haptic) window.typeAPI.haptic('return');
+      scrim.addEventListener('click', (e) => { if (e.target === scrim) closeCardMenu(); });
+      scrim.querySelector('[data-a="read"]').addEventListener('click', () => { closeCardMenu(); openPage(note); });
+      scrim.querySelector('[data-a="share"]').addEventListener('click', () => {
+        closeCardMenu();
+        if (window.typeAPI && window.typeAPI.shareNote) window.typeAPI.shareNote({ filename: note.filename, text: note.body, dir: settings.saveDir || null });
+        else if (navigator.share) { try { navigator.share({ text: note.body }); } catch (e) {} }
+      });
+      scrim.querySelector('[data-a="burn"]').addEventListener('click', () => { closeCardMenu(); burnCard(note); });
+    }
+    function burnCard(note) {
+      const i = view.indexOf(note);
+      const el = i >= 0 ? pageEls[i] : null;
+      if (el) {
+        el.classList.add('burning');
+        const host = el.querySelector('.spark-host');
+        if (host) for (let k = 0; k < 18; k++) {
+          const s = document.createElement('i'); s.className = 'spark';
+          s.style.left = (10 + Math.random() * 80) + '%';
+          s.style.setProperty('--rise', '-' + (80 + Math.random() * 150) + 'px');
+          s.style.setProperty('--drift', ((Math.random() - 0.5) * 70) + 'px');
+          s.style.animationDelay = (Math.random() * 380) + 'ms';
+          host.appendChild(s);
+        }
+      }
+      if (settings.haptics && window.typeAPI && window.typeAPI.haptic) window.typeAPI.haptic('return');
+      try { if (window.typeAPI && window.typeAPI.deleteNote) window.typeAPI.deleteNote(note.filename, settings.saveDir || null); } catch (e) {}
+      setTimeout(() => { archive = archive.filter(n => n.filename !== note.filename); rebuild(); }, 1350);
+    }
+
+    // swipe DOWN on the roll → back to the page (the mirror of swipe-up-to-enter).
+    // up leaves your page, down brings it right back — so you learn it was never gone.
+    let dSwipe = null;
+    keptScreen.addEventListener('touchstart', (e) => {
+      dSwipe = keptScreen.querySelector('.opened') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+    keptScreen.addEventListener('touchmove', (e) => {
+      if (!dSwipe) return;
+      const dy = e.touches[0].clientY - dSwipe.y;
+      const dx = Math.abs(e.touches[0].clientX - dSwipe.x);
+      if (dy > 80 && dx < 40) { dSwipe = null; close(); }   // clearly-vertical pull-down
+    }, { passive: true });
+    keptScreen.addEventListener('touchend', () => { dSwipe = null; });
+
+    async function open() {
+      if (document.body.classList.contains('reviewing')) return;
+      if (typeof frozen !== 'undefined' && frozen) return;
+      if (activeEl) activeEl.blur();        // drop the keyboard as the drawer lifts
+      if (typeof editSurface !== 'undefined' && editSurface) editSurface.blur();   // editable mode: drop it too
+      await loadArchive();
+      buildPages();
+      pos = 0; vel = 0; settle = false; centerCur = -1;
+      document.body.classList.add('reviewing');
+      keptScreen.setAttribute('aria-hidden', 'false');
+      requestAnimationFrame(applyLayout);
+    }
+    function close() {
+      document.body.classList.remove('reviewing');
+      keptScreen.setAttribute('aria-hidden', 'true');
+      cancelAnimationFrame(raf); raf = null;
+      const o = keptScreen.querySelector('.opened'); if (o) o.remove();
+      if (!searchBox.hidden) closeSearch();
+      // back to the canvas → bring the keyboard back up (the dream: the picker
+      // drops it, returning restores it). iOS only; the focus swizzle allows it.
+      if (isIOS && phase === 'writing' && !frozen && !feedbackMode) {
+        setTimeout(() => {
+          if (document.body.classList.contains('reviewing')) return;   // reopened in the meantime
+          if (typeof editActive === 'function' && editActive()) editSurface.focus();
+          else focusActiveEnd();
+        }, 60);
+      }
+    }
+    function toggle() { document.body.classList.contains('reviewing') ? close() : open(); }
+
+    // desktop / browser entry for testing (no touch wordmark there)
+    window.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); toggle(); }
+      if (e.key === 'Escape' && document.body.classList.contains('reviewing')) {
+        const o = keptScreen.querySelector('.opened'); if (o) { o.classList.add('closing'); setTimeout(() => o.remove(), 240); return; }
+        if (!searchBox.hidden) { closeSearch(); return; }
+        close();
+      }
+    });
+
+    return { open, close, toggle, _debugOpen: (i) => openPage(view[i || 0]), _debugMenu: () => showCardMenu(view[0]) };
+  })();
+  window.__typeKept = Kept;   // handle for DEBUG launch hooks (simulator screenshots)
 
   computeCols();
   const recovered = readDraft();

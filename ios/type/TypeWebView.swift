@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import UniformTypeIdentifiers
+import CoreMotion
 
 // The WKWebView host. Loads the bundled web/index.html (the same file the
 // desktop app ships) and exposes a small typeAPI bridge:
@@ -33,12 +34,26 @@ struct TypeWebView: UIViewRepresentable {
           log: (m) => window.webkit.messageHandlers.type.postMessage({ action: 'log', message: String(m) }),
           version: '\(version)',
           saveNote: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'saveNote', content: p && p.content || '', filename: p && p.filename || 'type.md' }),
+          listNotes: () => new Promise((resolve) => {
+            window.__typeListResolve = resolve;
+            window.webkit.messageHandlers.type.postMessage({ action: 'listNotes' });
+          }),
+          readNote: (filename) => new Promise((resolve) => {
+            window.__typeReadResolve = resolve;
+            window.webkit.messageHandlers.type.postMessage({ action: 'readNote', filename: filename || '' });
+          }),
+          shareNote: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'shareNote', filename: p && p.filename || '', text: p && p.text || '' }),
+          shareImage: (p) => { window.webkit.messageHandlers.type.postMessage({ action: 'shareImage', dataUrl: p && p.dataUrl || '', slug: p && p.slug || 'type-page' }); return Promise.resolve({ ok: true }); },
+          deleteNote: (filename) => new Promise((resolve) => {
+            window.__typeDeleteResolve = resolve;
+            window.webkit.messageHandlers.type.postMessage({ action: 'deleteNote', filename: filename || '' });
+          }),
           haptic: (kind) => window.webkit.messageHandlers.type.postMessage({ action: 'haptic', kind: kind || 'key' }),
           pickFolder: () => new Promise((resolve) => {
             window.__typePickFolderResolve = resolve;
             window.webkit.messageHandlers.type.postMessage({ action: 'pickFolder' });
           }),
-          setShellTheme: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'setShellTheme', bg: p && p.bg || '#ffffff', dark: !!(p && p.dark) }),
+          setShellTheme: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'setShellTheme', bg: p && p.bg || '#ffffff', dark: !!(p && p.dark), accent: p && p.accent || '#df5a26' }),
           sendFeedback: (p) => new Promise((resolve) => {
             window.__typeFeedbackResolve = resolve;
             window.webkit.messageHandlers.type.postMessage({ action: 'sendFeedback', body: p && p.body || '', screenshot: p && p.screenshot || null });
@@ -48,6 +63,7 @@ struct TypeWebView: UIViewRepresentable {
         config.userContentController.addUserScript(WKUserScript(source: bridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController.add(context.coordinator, name: "type")
 
+        AccessoryHidingWebView.allowKeyboardWithoutUserAction()   // the page can raise the keyboard on its own — we're here to write
         let webView = AccessoryHidingWebView(frame: .zero, configuration: config)
         context.coordinator.webView = webView
         webView.isOpaque = false
@@ -120,6 +136,31 @@ struct TypeWebView: UIViewRepresentable {
                     // the page mentions the destination on the kept-stamp
                     self.webView?.evaluateJavaScript("window.__typeSaved && window.__typeSaved('\(dest)')")
                 }
+            case "listNotes":
+                // hand the kept screen the saved .md files: filename + parsed
+                // frontmatter (dateISO, kept, words) + body, newest-first.
+                NoteSaver.list { items in
+                    let data = (try? JSONSerialization.data(withJSONObject: items)) ?? Data("[]".utf8)
+                    let json = String(data: data, encoding: .utf8) ?? "[]"
+                    self.webView?.evaluateJavaScript("window.__typeListResolve && window.__typeListResolve(\(json)); window.__typeListResolve = null;")
+                }
+            case "readNote":
+                let filename = body["filename"] as? String ?? ""
+                NoteSaver.read(filename: filename) { text in
+                    // wrap in a JSON array so the body is safely encoded, then unwrap
+                    let data = (try? JSONSerialization.data(withJSONObject: [text])) ?? Data("[\"\"]".utf8)
+                    let json = String(data: data, encoding: .utf8) ?? "[\"\"]"
+                    self.webView?.evaluateJavaScript("window.__typeReadResolve && window.__typeReadResolve((\(json))[0]); window.__typeReadResolve = null;")
+                }
+            case "shareNote":
+                shareNote(filename: body["filename"] as? String ?? "", text: body["text"] as? String ?? "")
+            case "shareImage":
+                shareImage(dataUrl: body["dataUrl"] as? String ?? "", slug: body["slug"] as? String ?? "type-page")
+            case "deleteNote":
+                let filename = body["filename"] as? String ?? ""
+                NoteSaver.delete(filename: filename) { ok in
+                    self.webView?.evaluateJavaScript("window.__typeDeleteResolve && window.__typeDeleteResolve(\(ok ? "true" : "false")); window.__typeDeleteResolve = null;")
+                }
             case "sendFeedback":
                 let text = body["body"] as? String ?? ""
                 sendFeedback(text, screenshot: body["screenshot"] as? String)
@@ -130,9 +171,13 @@ struct TypeWebView: UIViewRepresentable {
             case "setShellTheme":
                 let bg = body["bg"] as? String ?? "#ffffff"
                 let dark = body["dark"] as? Bool ?? false
+                let accent = body["accent"] as? String ?? "#df5a26"
                 DispatchQueue.main.async {
                     ThemeStore.shared.apply(bgHex: bg, dark: dark)
                     self.webView?.backgroundColor = UIColor(typeHex: bg)
+                    // tintColor drives the text-selection highlight + grab handles + caret
+                    // in the editable textarea; the OS default washed out on dark themes.
+                    self.webView?.tintColor = UIColor(typeHex: accent)
                 }
             case "log":
                 #if DEBUG
@@ -158,6 +203,18 @@ struct TypeWebView: UIViewRepresentable {
             let args = ProcessInfo.processInfo.arguments
             if args.contains("-typeTestSave") {
                 webView.evaluateJavaScript("window.typeAPI.saveNote({ content: '# bridge test\\n', filename: 'bridge-test.md' })")
+            }
+            if args.contains("-typeTestKept") {
+                // seed a couple of kept pages through the real bridge, then roll
+                // the kept screen up — so `simctl io screenshot` can prove it.
+                let js = """
+                window.typeAPI.saveNote({ content: '---\\ndate: 2026-06-14\\nkept: 14 June 2026\\nwords: 14\\n---\\n\\nThe unlived life within us is the one Resistance guards.\\nEvery morning the same negotiation — sit down, or invent a reason not to.\\n', filename: 'type-2026-06-14-09-00.md' });
+                setTimeout(() => window.typeAPI.saveNote({ content: '---\\ndate: 2026-06-12\\nkept: 12 June 2026\\nwords: 18\\n---\\n\\nTargeting in the second campaign was off. Gregory flagged it on the Next call.\\n', filename: 'type-2026-06-12-08-00.md' }), 250);
+                setTimeout(() => window.typeAPI.saveNote({ content: '---\\ndate: 2026-05-28\\nkept: 28 May 2026\\nwords: 20\\n---\\n\\nThe whole point is you cannot go back and fix the line. That constraint is the feature.\\n', filename: 'type-2026-05-28-07-00.md' }), 500);
+                setTimeout(() => window.__typeKept && window.__typeKept.open(), 1400);
+                setTimeout(() => window.__typeKept && window.__typeKept._debugOpen(0), 2200);
+                """
+                webView.evaluateJavaScript(js)
             }
             if args.contains("-typeTestType") {
                 let js = """
@@ -199,6 +256,41 @@ struct TypeWebView: UIViewRepresentable {
                 return
             }
             decisionHandler(.allow)
+        }
+
+        // present the native share sheet for a kept page. Shares the actual .md
+        // (copied to a temp file so the security-scoped original can be released),
+        // falling back to the plain text the page already has.
+        private func shareNote(filename: String, text: String) {
+            guard let root = webView?.window?.rootViewController else { return }
+            var items: [Any] = []
+            if let url = NoteSaver.tempCopy(filename: filename) { items = [url] }
+            else if !text.isEmpty { items = [text] }
+            guard !items.isEmpty else { return }
+            let av = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            if let pop = av.popoverPresentationController, let wv = webView {
+                pop.sourceView = wv
+                pop.sourceRect = CGRect(x: wv.bounds.midX, y: wv.bounds.maxY - 60, width: 0, height: 0)
+            }
+            root.present(av, animated: true)
+        }
+
+        // share a rendered page image (a "typed sheet" of the writing) to the
+        // native share sheet — write it to a temp PNG so AirDrop/Photos/Messages
+        // get a real file with a sensible name.
+        private func shareImage(dataUrl: String, slug: String) {
+            guard let comma = dataUrl.range(of: ","),
+                  let data = Data(base64Encoded: String(dataUrl[comma.upperBound...])),
+                  let root = webView?.window?.rootViewController else { return }
+            let safe = slug.isEmpty ? "type-page" : slug
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(safe).png")
+            do { try data.write(to: url) } catch { return }
+            let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            if let pop = av.popoverPresentationController, let wv = webView {
+                pop.sourceView = wv
+                pop.sourceRect = CGRect(x: wv.bounds.midX, y: wv.bounds.maxY - 60, width: 0, height: 0)
+            }
+            root.present(av, animated: true)
         }
 
         private func resolveFeedback(ok: Bool, cancelled: Bool = false, error: String? = nil) {
@@ -252,44 +344,120 @@ final class AccessoryHidingWebView: WKWebView {
     // sheet opens with the shot riding along. Motion events ride the
     // responder chain up from the focused content view, so the webview
     // hears every shake.
+    // iOS's built-in .motionShake needs a hard, sustained shake. Kept as a
+    // fallback, but the primary trigger is CoreMotion below with a gentler,
+    // tunable threshold so a normal flick of the wrist is enough.
     override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
-        if motion == .motionShake {
-            takeSnapshot(with: WKSnapshotConfiguration()) { [weak self] image, _ in
-                var arg = "null"
-                if let jpeg = image?.jpegData(compressionQuality: 0.7) {
-                    arg = "'data:image/jpeg;base64,\(jpeg.base64EncodedString())'"
-                }
-                self?.evaluateJavaScript("window.__typeShake && window.__typeShake(\(arg))")
-            }
-        }
+        if motion == .motionShake { triggerShakeFeedback() }
         super.motionEnded(motion, with: event)
     }
 
-    private static var hiddenClassesByContent: [String: AnyClass] = [:]
+    private func triggerShakeFeedback() {
+        takeSnapshot(with: WKSnapshotConfiguration()) { [weak self] image, _ in
+            var arg = "null"
+            if let jpeg = image?.jpegData(compressionQuality: 0.7) {
+                arg = "'data:image/jpeg;base64,\(jpeg.base64EncodedString())'"
+            }
+            self?.evaluateJavaScript("window.__typeShake && window.__typeShake(\(arg))")
+        }
+    }
+
+    // CoreMotion shake detection — a couple of acceleration peaks in quick
+    // succession (a back-and-forth shake), not a single bump, so it's easy to
+    // trigger on purpose but won't fire when you just set the phone down.
+    private let motion = CMMotionManager()
+    private var shakePeaks: [TimeInterval] = []
+    private var lastShakeFire: TimeInterval = 0
+    private func startShakeDetection() {
+        guard motion.isDeviceMotionAvailable else { return }
+        motion.deviceMotionUpdateInterval = 1.0 / 50.0
+        motion.startDeviceMotionUpdates(to: .main) { [weak self] m, _ in
+            guard let self, let a = m?.userAcceleration else { return }
+            let mag = (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot()   // gravity already removed
+            let now = ProcessInfo.processInfo.systemUptime
+            guard mag > 2.8 else { return }                              // firm, deliberate shake (doubled — was too easy)
+            if let last = self.shakePeaks.last, now - last < 0.07 { return }  // same peak, one sample
+            self.shakePeaks.append(now)
+            self.shakePeaks = self.shakePeaks.filter { now - $0 < 0.9 }
+            if self.shakePeaks.count >= 2, now - self.lastShakeFire > 2.0 {
+                self.lastShakeFire = now
+                self.shakePeaks.removeAll()
+                self.triggerShakeFeedback()
+            }
+        }
+    }
+
+    private static var swappedClassesByContent: [String: AnyClass] = [:]
+
+    // iOS normally refuses to show the keyboard for a programmatic focus() — it
+    // requires a user tap. We're a writing app: the page focuses the live line as
+    // soon as writing is possible and the keyboard should come up with it. Patch
+    // WKContentView's focus callback to report the focus as user-initiated. Fully
+    // defensive: if the private selector isn't present, nothing changes and the
+    // app simply falls back to tap-to-type.
+    private static var didPatchKeyboard = false
+    static func allowKeyboardWithoutUserAction() {
+        guard !didPatchKeyboard else { return }
+        didPatchKeyboard = true
+        guard let cls = NSClassFromString("WKContentView") else { return }
+        let sel = NSSelectorFromString("_elementDidFocus:userIsInteracting:blurPreviousNode:activityStateChanges:userObject:")
+        guard let method = class_getInstanceMethod(cls, sel) else { return }
+        typealias Orig = @convention(c) (Any, Selector, UnsafeRawPointer, Bool, Bool, Bool, Any?) -> Void
+        let orig = unsafeBitCast(method_getImplementation(method), to: Orig.self)
+        let block: @convention(block) (Any, UnsafeRawPointer, Bool, Bool, Bool, Any?) -> Void = { me, node, _, blur, change, obj in
+            orig(me, sel, node, true, blur, change, obj)   // force userIsInteracting = true
+        }
+        method_setImplementation(method, imp_implementationWithBlock(block))
+    }
 
     override init(frame: CGRect, configuration: WKWebViewConfiguration) {
         super.init(frame: frame, configuration: configuration)
-        // hideAccessoryBar() — DISABLED: on real hardware (iOS 26) the dynamic
-        // subclass kills UITextInput insertion entirely: keydown events still
-        // reach the page but no character ever lands in the field. The shortcut
-        // bar is chrome we'd rather lose, but typing comes first.
+        // Replace the system shortcut bar (‹ ∨ ✓) with our own KEEP · kept · BURN
+        // toolbar welded to the keyboard. NOTE: overriding the content view's
+        // inputAccessoryView is the same lever that, when it returned nil to
+        // *hide* the bar, broke text insertion on iOS 26. Returning a real
+        // toolbar is a different case and is being trialled — if typing
+        // misbehaves on device, delete installAccessory()/swapAccessory().
+        NotificationCenter.default.addObserver(self, selector: #selector(swapAccessory),
+                                               name: UIResponder.keyboardWillShowNotification, object: nil)
+        installAccessory()
+        startShakeDetection()
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    private func hideAccessoryBar() {
-        guard let contentView = scrollView.subviews.first(where: { String(describing: type(of: $0)).hasPrefix("WKContent") }) else { return }
-        let baseName = String(describing: type(of: contentView))
-        if let cached = Self.hiddenClassesByContent[baseName] {
-            object_setClass(contentView, cached)
-            return
+    // A real, zero-height accessory: returning a non-nil view suppresses iOS's
+    // ‹ ∨ ✓ shortcut bar WITHOUT the input-break that returning nil caused on
+    // iOS 26. KEEP · ▬ · BURN live in the web bar docked just above the keyboard.
+    private lazy var hiddenAccessory: UIView = {
+        let v = UIView(frame: .zero)
+        v.autoresizingMask = [.flexibleWidth]
+        return v
+    }()
+
+    private func installAccessory(retries: Int = 8) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if !self.swapAccessory(), retries > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.installAccessory(retries: retries - 1) }
+            }
         }
+    }
+
+    @discardableResult
+    @objc private func swapAccessory() -> Bool {
+        guard let contentView = scrollView.subviews.first(where: { String(describing: type(of: $0)).hasPrefix("WKContent") }) else { return false }
+        let baseName = String(describing: type(of: contentView))
+        if String(describing: type(of: contentView)).hasSuffix("_TypeAccessory") { return true }   // already swapped
+        let v = hiddenAccessory
+        if let cached = Self.swappedClassesByContent[baseName] { object_setClass(contentView, cached); return true }
         guard let baseClass = object_getClass(contentView),
-              let newClass = objc_allocateClassPair(baseClass, baseName + "_NoAccessory", 0) else { return }
-        let getter: @convention(block) (AnyObject) -> UIView? = { _ in nil }
+              let newClass = objc_allocateClassPair(baseClass, baseName + "_TypeAccessory", 0) else { return false }
+        let getter: @convention(block) (AnyObject) -> UIView? = { _ in v }
         class_addMethod(newClass, #selector(getter: UIResponder.inputAccessoryView), imp_implementationWithBlock(getter), "@@:")
         objc_registerClassPair(newClass)
-        Self.hiddenClassesByContent[baseName] = newClass
+        Self.swappedClassesByContent[baseName] = newClass
         object_setClass(contentView, newClass)
+        return true
     }
 }

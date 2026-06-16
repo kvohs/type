@@ -10,8 +10,14 @@ contextBridge.exposeInMainWorld('typeAPI', {
   isDesktop: true,
   version: TYPE_VERSION,
   pickFolder: () => ipcRenderer.invoke('type:pick-folder'),
+  openFolder: (dir) => ipcRenderer.invoke('type:open-folder', dir || null),   // reveal the save folder in Finder
   saveNote: (payload) => ipcRenderer.invoke('type:save-note', payload),
+  // kept-notes review: read / open / delete the .md files in the save folder
+  listNotes: (dir) => ipcRenderer.invoke('type:list-notes', dir || null),
+  readNote: (filename, dir) => ipcRenderer.invoke('type:read-note', { filename, dir: dir || null }),
+  deleteNote: (filename, dir) => ipcRenderer.invoke('type:delete-note', { filename, dir: dir || null }),
   shareImage: (payload) => ipcRenderer.invoke('type:share-image', payload),
+  shareNote: (payload) => ipcRenderer.invoke('type:share-note', payload),   // share a kept .md via the native macOS share sheet
   sendFeedback: (payload) => ipcRenderer.invoke('type:send-feedback', payload),
   captureFeedback: () => ipcRenderer.invoke('type:capture-feedback'),
   setZen: (on) => ipcRenderer.invoke('type:set-zen', !!on),

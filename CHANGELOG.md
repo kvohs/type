@@ -6,6 +6,19 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.10.0
+
+### New
+- **iCloud sync, on by default.** Your writing saves to a “type” folder in iCloud Drive and syncs across your devices — privately. type has no server, so your pages are never seen by anyone but you. On first launch you choose: sync with iCloud, or pick your own folder (an Obsidian vault, Dropbox, anywhere). A single iCloud-sync switch lets you save somewhere else for a while and return to your type folder in one tap.
+- **Settings, as a side rail.** Opening settings now slides the page aside to reveal a full-height panel, the way the iPhone app does. Everything’s grouped — Saving, Writing, Display, Sound — with theme and line spacing pinned at the bottom.
+- **Browse your kept pages.** A quiet **kept** sits between KEEP and BURN (or press ⌘⇧K): it opens everything you’ve saved as a roll of paper sheets you can scroll, arrow through, and open to read.
+- **A cleaner bottom bar.** KEEP · KEPT · BURN are plain words now; hover any of them for its shortcut. Settings moved to a small menu in the top-right corner, and share to the top-left.
+
+### Changed
+- Themes are **day / night / amber / dispatch**; line spacing is **tight / normal / loose / wide**.
+
+---
+
 ## v1.9.0
 
 ### New

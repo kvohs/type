@@ -12,6 +12,31 @@ const { version: APP_VERSION } = require('./package.json');
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
 
+// ---- where kept pages live ----
+// By default, type saves to its iCloud Drive folder — the SAME container the
+// iPhone app writes to, so pages sync across devices and show up as a "type"
+// folder in iCloud Drive: plain .md files you can open, move, and grab in
+// Finder (the iA Writer model, not a hidden database). Power users override it
+// with the folder picker in settings (an Obsidian vault, Dropbox, anywhere).
+// When iCloud Drive is off we fall back to Downloads.
+const ICLOUD_ROOT = path.join(os.homedir(), 'Library', 'Mobile Documents');
+const ICLOUD_TYPE_DOCS = path.join(ICLOUD_ROOT, 'iCloud~com~kellyvohs~type', 'Documents');
+
+// iCloud Drive is enabled iff its CloudDocs root exists under Mobile Documents.
+function icloudAvailable() {
+  try { return fs.existsSync(path.join(ICLOUD_ROOT, 'com~apple~CloudDocs')); }
+  catch (e) { return false; }
+}
+
+// The resolved default folder when the user hasn't picked one.
+function defaultSaveDir() {
+  if (icloudAvailable()) {
+    try { fs.mkdirSync(ICLOUD_TYPE_DOCS, { recursive: true }); return ICLOUD_TYPE_DOCS; }
+    catch (e) { /* iCloud present but unwritable — fall back */ }
+  }
+  return app.getPath('downloads');
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1100,
@@ -70,12 +95,21 @@ ipcMain.handle('type:pick-folder', async (e) => {
   const opts = {
     title: 'Choose where type saves',
     properties: ['openDirectory', 'createDirectory'],
+    defaultPath: defaultSaveDir(),   // start browsing at the current default (iCloud Drive · type)
   };
   const res = win
     ? await dialog.showOpenDialog(win, opts)
     : await dialog.showOpenDialog(opts);
   if (res.canceled || !res.filePaths.length) return null;
   return res.filePaths[0];
+});
+
+// The renderer asks where the default lives, to show the right folder label in
+// settings ("iCloud Drive · type" vs "Downloads") when the user hasn't picked one.
+ipcMain.handle('type:default-save-dir', () => {
+  const dir = defaultSaveDir();
+  const icloud = dir === ICLOUD_TYPE_DOCS;
+  return { dir, icloud, label: icloud ? 'iCloud Drive · type' : 'Downloads' };
 });
 
 ipcMain.handle('type:set-zen', (e, on) => {
@@ -129,7 +163,7 @@ ipcMain.handle('type:share-note', async (_e, payload) => {
     const filename = (payload && payload.filename) || 'type-note.md';
     // prefer the real saved file (same dir resolution as list/read-note); fall
     // back to a temp copy of the text if it isn't on disk where we expect.
-    const dir = (payload && payload.dir) || app.getPath('downloads');
+    const dir = (payload && payload.dir) || defaultSaveDir();
     let file = path.join(dir, filename);
     if (!fs.existsSync(file)) {
       file = path.join(os.tmpdir(), filename.replace(/[^\w.\-]/g, '_'));
@@ -211,7 +245,7 @@ ipcMain.handle('type:capture-feedback', async (e) => {
 ipcMain.handle('type:save-note', async (_e, payload) => {
   try {
     const { content, filename } = payload || {};
-    const dir = (payload && payload.dir) || app.getPath('downloads');
+    const dir = (payload && payload.dir) || defaultSaveDir();
     fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, filename);
     fs.writeFileSync(file, content, 'utf8');
@@ -240,7 +274,7 @@ function parseNoteFile(text) {
 }
 ipcMain.handle('type:list-notes', async (_e, dir) => {
   try {
-    const d = dir || app.getPath('downloads');
+    const d = dir || defaultSaveDir();
     if (!fs.existsSync(d)) return [];
     const out = [];
     for (const f of fs.readdirSync(d)) {
@@ -261,7 +295,7 @@ ipcMain.handle('type:list-notes', async (_e, dir) => {
 });
 ipcMain.handle('type:read-note', async (_e, payload) => {
   try {
-    const dir = (payload && payload.dir) || app.getPath('downloads');
+    const dir = (payload && payload.dir) || defaultSaveDir();
     const filename = payload && payload.filename;
     if (!filename) return '';
     return parseNoteFile(fs.readFileSync(path.join(dir, filename), 'utf8')).body;
@@ -269,7 +303,7 @@ ipcMain.handle('type:read-note', async (_e, payload) => {
 });
 ipcMain.handle('type:delete-note', async (_e, payload) => {
   try {
-    const dir = (payload && payload.dir) || app.getPath('downloads');
+    const dir = (payload && payload.dir) || defaultSaveDir();
     const filename = payload && payload.filename;
     if (!filename) return false;
     fs.unlinkSync(path.join(dir, filename));
@@ -279,7 +313,7 @@ ipcMain.handle('type:delete-note', async (_e, payload) => {
 // open the save folder in Finder so the user can see their plain .md files
 ipcMain.handle('type:open-folder', async (_e, dir) => {
   try {
-    const d = dir || app.getPath('downloads');
+    const d = dir || defaultSaveDir();
     fs.mkdirSync(d, { recursive: true });
     const err = await shell.openPath(d);
     return { ok: !err, error: err || undefined };

@@ -53,6 +53,7 @@ struct TypeWebView: UIViewRepresentable {
             window.__typePickFolderResolve = resolve;
             window.webkit.messageHandlers.type.postMessage({ action: 'pickFolder' });
           }),
+          clearFolder: () => window.webkit.messageHandlers.type.postMessage({ action: 'clearFolder' }),   // forget the picked folder → saves return to the iCloud "type" folder
           setShellTheme: (p) => window.webkit.messageHandlers.type.postMessage({ action: 'setShellTheme', bg: p && p.bg || '#ffffff', dark: !!(p && p.dark), accent: p && p.accent || '#df5a26' }),
           sendFeedback: (p) => new Promise((resolve) => {
             window.__typeFeedbackResolve = resolve;
@@ -170,6 +171,11 @@ struct TypeWebView: UIViewRepresentable {
                 Haptics.play(body["kind"] as? String ?? "key")
             case "pickFolder":
                 presentFolderPicker()
+            case "clearFolder":
+                // forget the user-picked folder so saves fall back to the iCloud
+                // "type" container — this is what "turn iCloud sync back on" does
+                UserDefaults.standard.removeObject(forKey: "saveFolderBookmark")
+                UserDefaults.standard.removeObject(forKey: "saveFolderName")
             case "setShellTheme":
                 let bg = body["bg"] as? String ?? "#ffffff"
                 let dark = body["dark"] as? Bool ?? false

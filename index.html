@@ -331,7 +331,32 @@
   .hint .l { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-faint); }
   .hint-btn { cursor: pointer; }
   .hint-btn:hover .k, .hint-btn:hover .l { color: var(--ink); }
-  .sep { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-faint); opacity: .7; }
+  .sep { width: 1px; height: 12px; border-radius: 0; background: var(--ink-faint); opacity: .5; }   /* a pipe, not a dot */
+  /* desktop bottom bar: just the words, spaced out — the shortcut lives in a
+     hover tip (like the settings info tips), not jammed inline */
+  body:not(.ios) .hint .k { display: none; }   /* just words; shortcut lives in the hover tip */
+  body:not(.ios) .hints-group:not([hidden]) { display: inline-flex; align-items: center; gap: 26px; }   /* KEEP | KEPT | BURN, breathe */
+  /* small frosted tip above a bottom word, same look as the settings callout */
+  .hint-tip {
+    position: fixed; z-index: 14; transform: translate(-50%, calc(-100% - 10px));
+    padding: 5px 9px; white-space: nowrap;
+    background: color-mix(in srgb, var(--panel) 82%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%);
+    color: var(--ink-soft); border: 1px solid var(--rule); border-radius: 7px;
+    box-shadow: 0 10px 24px -12px var(--panel-shadow);
+    font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+    opacity: 0; pointer-events: none; transition: opacity .14s ease;
+  }
+  .hint-tip.show { opacity: 1; }
+  /* feather: the page fades out into the bottom margin so scrolled-back text
+     dissolves behind the KEEP | KEPT | BURN bar instead of colliding with it */
+  .feather { display: none; }
+  body:not(.ios) .feather {
+    display: block; position: fixed; left: 0; right: 0; bottom: 0; height: 134px;
+    background: linear-gradient(to top, var(--paper) 46%, transparent);
+    pointer-events: none; z-index: 9; transition: opacity .3s ease;
+  }
+  body.settings-open:not(.ios) .feather, body.reviewing .feather, body.feedback .feather { opacity: 0; }
 
   /* ---------- save: date stamp ---------- */
   .stamp {
@@ -547,7 +572,7 @@
   }
   .setrow input:checked ~ .sw { background: var(--accent); }
   .setrow input:checked ~ .sw::after { transform: translateX(16px); }
-  .setdiv { height: 1px; background: var(--rule); margin: 6px 0; }
+  .setdiv { height: 0.5px; background: color-mix(in srgb, var(--rule) 70%, transparent); margin: 6px 0; }
   /* a row that can't change right now (editable mode mid-page) — dimmed, still hoverable for the info tip */
   .setrow.setrow-locked { opacity: .45; }
   .setrow-btn { cursor: pointer; gap: 12px; }
@@ -557,6 +582,52 @@
   .sound-details[hidden] { display: none; }
   .setrow-sub { padding-left: 16px; }
   .setrow-sub > span:first-child { color: var(--ink-quiet); }
+  /* collapsible groups — tap the header to open/close; toggles inside stay independent */
+  .setgroup + .setgroup { border-top: 0.5px solid color-mix(in srgb, var(--rule) 70%, transparent); }
+  .setgroup-head {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; background: none; border: 0; cursor: pointer; text-align: left;
+    padding: 10px 0; font-family: var(--mono); font-size: 12.5px; font-weight: 700;
+    letter-spacing: .02em; color: var(--ink); user-select: none;
+  }
+  .setgroup-head .chev { flex: none; font-size: 9px; color: var(--ink-faint); transition: transform .18s ease; }
+  .setgroup-head .chev::before { content: "\25B8"; }   /* ▸ collapsed */
+  .setgroup.open .setgroup-head .chev { transform: rotate(90deg); }
+  .setgroup-body { display: none; padding-bottom: 6px; }
+  .setgroup.open .setgroup-body { display: block; }
+  .setcaption { font-size: 11px; line-height: 1.45; color: var(--ink-faint); padding: 4px 0 2px; }
+  .setcaption[hidden] { display: none; }
+  /* first-run choice: iCloud sync vs a folder */
+  .welcome-modal {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.34); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    animation: settingsIn .22s ease;
+  }
+  .welcome-modal[hidden] { display: none; }
+  .welcome-card {
+    width: 340px; max-width: 86vw; text-align: center; font-family: var(--mono);
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 16px;
+    padding: 26px 24px 18px; box-shadow: 0 24px 60px -16px var(--panel-shadow);
+  }
+  .welcome-mark { font-size: 17px; color: var(--ink); margin-bottom: 12px; }
+  .welcome-mark .dot { color: var(--accent); }
+  .welcome-lead { font-size: 13px; color: var(--ink-soft); margin: 0 0 16px; }
+  .welcome-btn {
+    display: block; width: 100%; text-align: left; cursor: pointer;
+    background: none; border: 1px solid var(--rule); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 10px; font-family: var(--mono);
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .welcome-btn.primary { border-color: var(--accent); }
+  .welcome-btn:hover { border-color: var(--accent); }
+  .welcome-btn .wb-title { display: block; font-size: 13px; color: var(--ink); margin-bottom: 3px; }
+  .welcome-btn .wb-sub { display: block; font-size: 11px; line-height: 1.4; color: var(--ink-quiet); }
+  .welcome-foot { font-size: 10.5px; color: var(--ink-faint); margin: 8px 0 0; }
+  .welcome-done-body { font-size: 12px; line-height: 1.5; color: var(--ink-soft); margin: 0 0 16px; text-align: left; }
+  .welcome-start { text-align: center; }
+  .welcome-start .wb-title { margin: 0; }
+  .welcome-link { color: var(--accent); cursor: pointer; }
   .setval {
     flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 12px; color: var(--ink-soft, #2c2d32);
@@ -660,6 +731,23 @@
     border-left-color: color-mix(in srgb, var(--panel) 78%, transparent);
   }
   .float-tip.show { opacity: 1; transform: translateY(-50%) translateX(0); }
+  /* iOS: a callout positioned by JS just under the (i), with an arrow pointing
+     up at it (the desktop rail position put it half off-screen). */
+  body.ios .float-tip {
+    right: auto !important; bottom: auto !important;
+    transform: none !important;
+    padding: 14px 16px; font-size: 14px; line-height: 1.55; z-index: 70;   /* width + left + top set inline by JS */
+  }
+  body.ios .float-tip.show { transform: none !important; }
+  body.ios .float-tip::after {
+    display: block; content: ""; right: auto;
+    position: absolute; top: -7px; left: var(--arrow-x, 50%);
+    transform: translateX(-50%) rotate(45deg);
+    width: 13px; height: 13px;
+    background: color-mix(in srgb, var(--panel) 82%, transparent);
+    border-left: 1px solid var(--rule); border-top: 1px solid var(--rule);
+    -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%);
+  }
 
   /* ---------- iOS (touch) ---------- */
   /* the iPhone app adds body.ios and keeps --vvh / --vvt synced to the
@@ -753,7 +841,7 @@
   /* iOS: settings is a full-height rail that sits UNDER the paper on the right.
      Opening it slides the paper to the LEFT to expose the rail beneath — like
      Dispatch. The rail is stationary; the page is what moves. */
-  body.ios { --rail: min(50vw, 280px); }   /* slim rail → half the paper stays visible */
+  body.ios { --rail: min(62vw, 300px); }   /* a touch wider so the settings don't jam up */
   body.ios .settings {
     top: var(--vvt, 0px); bottom: auto; left: auto; right: 0;
     transform: none; animation: none;
@@ -763,18 +851,41 @@
     overflow-y: auto;
     z-index: 1;                       /* underneath the paper */
   }
-  /* the spacing picker (3 short words) tightens to fit one line in the slim rail */
-  body.ios .seg { font-size: 11px; letter-spacing: .02em; }
-  body.ios .seg-opt { padding: 4px 3px; }
-  body.ios .seg-opt + .seg-opt::before { margin: 0 1px 0 -2px; }
-  /* the 4 themes won't fit one line in a 50% rail, so lay them out as a 2×2 grid —
-     spaced out and roomier than the old cramped single row */
-  body.ios #themePick {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 6px;
+  /* theme + spacing pickers: 4 options each, no dots, bigger text. (Shared.) */
+  #themePick, #spacePick {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 10px;
     width: 100%; font-size: 12px;
   }
-  body.ios #themePick .seg-opt { padding: 6px 4px; }
-  body.ios #themePick .seg-opt + .seg-opt::before { content: none; }   /* no dots in the grid */
+  body.ios #themePick, body.ios #spacePick { font-size: 14px; gap: 14px 10px; }   /* bigger touch targets on the phone */
+  #themePick .seg-opt, #spacePick .seg-opt { padding: 7px 6px; }
+  body.ios #themePick .seg-opt, body.ios #spacePick .seg-opt { padding: 10px 6px; }
+  #themePick .seg-opt + .seg-opt::before,
+  #spacePick .seg-opt + .seg-opt::before { content: none; }   /* no dots in the grid */
+  /* roomier rows + headers on the phone only (touch targets) */
+  body.ios .seg { font-size: 13px; letter-spacing: .02em; }
+  body.ios .setrow { padding: 11px 0; font-size: 14px; }
+  body.ios .setgroup-head { padding: 13px 0; font-size: 14px; }
+  body.ios .setrow-seg { padding: 8px 0; }
+  /* settings order (shared, Mac + iOS): rarely-changed up top (Saving, version),
+     most-used (spacing + theme) at the bottom, side by side. */
+  .settings { display: flex; flex-direction: column; }
+  #setStats { order: 0; }
+  .setgroup[data-group="saving"]  { order: 1; }
+  .setgroup[data-group="writing"] { order: 2; }
+  .setgroup[data-group="sound"]   { order: 3; }
+  .setgroup[data-group="display"] { order: 4; }
+  .setpair { order: 6; display: flex; gap: 16px; align-items: flex-start;
+    border-top: 0.5px solid color-mix(in srgb, var(--rule) 70%, transparent); padding-top: 14px; margin-top: 4px; }
+  #setVersion { order: 7; margin-top: 16px; }   /* quiet footer at the very bottom */
+  .setdiv { display: none; }
+  /* each group carries its own hairline so separators read right in any order */
+  .setgroup { border-top: 0.5px solid color-mix(in srgb, var(--rule) 70%, transparent); padding-top: 2px; }
+  /* spacing left, theme right — each a single-column tap list */
+  .setpair .setrow-seg { flex: 1; padding: 0; }
+  .setpair .setseg-space { order: -1; }
+  .setpair #themePick,
+  .setpair #spacePick { grid-template-columns: 1fr; gap: 6px; }
+  .setpair .seg-opt { padding: 9px 6px; }
   /* the paper (the writing stage) rides above the rail and slides left to reveal it */
   body.ios #stage {
     background: var(--paper);         /* opaque, so the rail stays hidden until revealed */
@@ -801,13 +912,41 @@
      stage so it travels with the paper and never covers the revealed rail. */
   .page-dim { position: absolute; inset: 0; z-index: 40; background: rgba(0,0,0,0); pointer-events: none; transition: background .32s ease; }
   body.ios.settings-open .page-dim { background: rgba(0,0,0,0); pointer-events: auto; }   /* no grey wash — page shows its true color; the shadow alone says "on top". (still catches taps to close) */
-  /* desktop keeps the centered card + a simple scrim behind it */
+  /* desktop: same rail model as iOS — settings is a full-height strip down the
+     right edge, sitting UNDER the paper; opening slides the page left to reveal
+     it. The page moves; the rail stays put. */
+  body:not(.ios) { --rail: min(340px, 38vw); }
+  body:not(.ios) .settings {
+    top: 0; bottom: auto; left: auto; right: 0;
+    transform: none; animation: none;
+    width: calc(var(--rail) + 40px); height: 100vh; max-height: none;   /* +40 tucks under the paper so its rounded corners sit over the rail, no gap */
+    border: 0; border-radius: 0; box-shadow: none;
+    padding: 44px 22px 26px 62px;     /* extra left padding keeps the content in the visible strip */
+    overflow-y: auto; overscroll-behavior: contain;
+    z-index: 1;                        /* underneath the paper — keeps the paper-over-rail overlap */
+  }
+  body:not(.ios) #stage {
+    background: var(--paper);          /* opaque so the rail hides until revealed */
+    z-index: 2;
+    transition: transform .32s cubic-bezier(.22,.61,.25,1), border-radius .32s ease, box-shadow .32s ease;
+  }
+  body.settings-open:not(.ios) #stage {
+    transform: translateX(calc(-1 * var(--rail)));
+    border-radius: 0 26px 26px 0;      /* a lifted-sheet curve on the leading edge */
+    box-shadow: 18px 0 40px -22px rgba(0,0,0,0.40);   /* paper casts onto the rail */
+  }
+  /* clean reveal: the bottom hints bow out while the rail is open (close by
+     clicking the page, ⌘, or Esc) */
+  body.settings-open:not(.ios) .hints,
+  body.settings-open:not(.ios) .prose-share { opacity: 0; pointer-events: none; }
+  /* the scrim no longer washes the screen — it only covers the page (left of the
+     rail) and catches the click-to-close; the paper's shadow says "on top" */
   .settings-scrim {
     position: fixed; inset: 0; z-index: 11;
     background: rgba(0,0,0,0); pointer-events: none;
     transition: background .28s ease;
   }
-  body.settings-open:not(.ios) .settings-scrim { background: rgba(0,0,0,.42); pointer-events: auto; }
+  body.settings-open:not(.ios) .settings-scrim { left: 0; right: var(--rail); pointer-events: auto; }
   body.ios .settings-scrim { display: none; }   /* iOS uses the in-stage page-dim instead */
   /* settings lives at the top corner on the phone — a quiet gear glyph,
      keep & burn alone at the bottom. 40px box = a real thumb target. */
@@ -822,19 +961,33 @@
     -webkit-tap-highlight-color: transparent;
   }
   body.ios .hint.ios-settings:active { color: var(--ink); }
-  /* share glyph — top-left mirror of settings; only once there's prose to share */
+  /* share glyph — top-left, mirroring the settings hamburger top-right; only
+     once there's prose to share. (Desktop sits it just right of the traffic
+     lights; iOS hugs the corner.) */
   .prose-share {
     position: fixed; z-index: 13;
-    top: 14px; right: 16px;                 /* desktop: top-right (free corner; traffic lights are top-left) */
+    top: 14px; left: 88px; right: auto;     /* desktop: top-left, clear of the traffic lights */
     width: 40px; height: 40px;
     display: inline-flex; align-items: center; justify-content: center;
     color: var(--ink-faint); opacity: 0; pointer-events: none; cursor: pointer;   /* match the KEEP button */
     transition: opacity .35s ease; -webkit-tap-highlight-color: transparent;
     -webkit-app-region: no-drag;            /* stays clickable over the desktop drag region */
   }
-  body.ios .prose-share {                   /* iOS: top-left (settings hamburger is top-right) */
+  body.ios .prose-share {                   /* iOS: hug the top-left corner */
     top: calc(8px + env(safe-area-inset-top, 0px)); left: 12px; right: auto;
   }
+  /* desktop settings opener: a hamburger in the top-right corner (mirrors iOS).
+     Reuses the bottom-bar settings hint, lifted out into the corner. */
+  body:not(.ios) .corner-settings {
+    position: fixed; z-index: 13; top: 14px; right: 16px;
+    width: 40px; height: 40px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ink-faint); cursor: pointer;
+    -webkit-app-region: no-drag;
+    transition: opacity .35s ease, color .15s ease;
+  }
+  body:not(.ios) .corner-settings:hover { color: var(--ink); }
+  body.settings-open:not(.ios) .corner-settings { opacity: 0; pointer-events: none; }   /* the rail takes the corner */
   body.has-prose .prose-share { opacity: 1; pointer-events: auto; }
   .prose-share:hover, .prose-share:active { color: var(--ink); }
   body.reviewing .prose-share, body.feedback .prose-share { opacity: 0 !important; pointer-events: none; }
@@ -896,6 +1049,7 @@
   body.reviewing .kept-scrim { background: rgba(0,0,0,.28); pointer-events: auto; }
   /* the writing-screen corner controls bow out while the drawer is up */
   body.reviewing .ios-kept-entry, body.reviewing .hint.ios-settings { opacity: 0; pointer-events: none; }
+  body.reviewing:not(.ios) .hints { opacity: 0; pointer-events: none; }   /* bottom bar bows out while browsing kept */
   @media (prefers-reduced-motion: reduce) {
     .kept-screen { transition: transform .25s ease; }
   }
@@ -907,6 +1061,14 @@
     z-index: 13; width: 72px; height: 26px; padding: 0; border: 0; background: none; cursor: pointer;
     display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
   .kept-grab::before { content: ""; width: 44px; height: 5px; border-radius: 3px; background: var(--ink-faint); opacity: .6; transition: opacity .15s ease; }
+  /* a quiet, clickable "esc" top-left — tells you the shortcut and closes the
+     drawer on click. desktop only (no Esc key on the phone) */
+  .kept-esc { position: absolute; top: 26px; left: 18px; z-index: 13;
+    appearance: none; background: none; border: 0; padding: 8px 10px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--ink-faint); cursor: pointer; transition: color .15s ease; -webkit-app-region: no-drag; }
+  .kept-esc:hover { color: var(--ink-quiet); }
+  body.ios .kept-esc { display: none; }
   .kept-grab:active::before { opacity: 1; }
   /* top-left "type." — the way back to the page (mirrors "kept" on the writing screen) */
   .kept-mark { appearance: none; background: none; border: 0; font-family: var(--mono); font-weight: 700;
@@ -940,6 +1102,10 @@
     backface-visibility: hidden; will-change: transform, opacity; cursor: pointer; overflow: hidden;
   }
   .page.is-focus { box-shadow: 0 22px 50px -16px var(--panel-shadow), inset 0 1px 0 var(--emboss); }
+  /* desktop: the roll reads like paper sheets, not phone cards — white paper,
+     no card border, a soft drop shadow, crisp corners */
+  body:not(.ios) .page { background: var(--paper); border: 1px solid color-mix(in srgb, var(--rule) 75%, transparent); border-radius: 1px; width: min(384px, 34vw); height: auto; aspect-ratio: 8.5 / 11; box-shadow: 0 12px 32px -12px rgba(0,0,0,.22); }
+  body:not(.ios) .page.is-focus { box-shadow: 0 26px 60px -18px rgba(0,0,0,.30); }
   .page-stamp { flex: none; font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: .26em; text-indent: .26em; color: var(--ink); text-shadow: var(--ribbon, none); }
   .page-rule { flex: none; margin-top: 13px; height: 1px; width: 30px; background: var(--ink-faint); }
   .page-body { margin-top: 20px; flex: 1; min-height: 0; overflow: hidden;
@@ -987,14 +1153,19 @@
   .opened-scroll::-webkit-scrollbar { display: none; }   /* no chrome — just scroll */
   .opened-body { margin-top: 18px; }
   .opened-body p { font-family: var(--mono); font-size: 15px; line-height: 2.0; margin: 0 0 18px; color: var(--ink); text-wrap: pretty; text-shadow: var(--ribbon, none); }
+  /* desktop: the opened sheet reads like a document, not a phone card — a
+     centered measure, more top breath, no phone grab handle */
+  body:not(.ios) .opened-sheet { max-width: 660px; width: 100%; margin: 0 auto; padding: 48px 36px 18px; }
+  body:not(.ios) .opened-grab { display: none; }
+  body:not(.ios) .opened-body p { font-size: 16px; }
   /* a clear, labelled footer instead of a lone chevron: back to the sheets,
      share — burn joins it in the burn pass */
-  .opened-foot { flex: none; display: flex; align-items: center; justify-content: center; gap: 16px;
+  .opened-foot { flex: none; display: flex; align-items: center; justify-content: center; gap: 26px;
     padding: 8px 0 calc(18px + env(safe-area-inset-bottom, 0px)); }
   .of-btn { appearance: none; background: none; border: 0; font-family: var(--mono); font-size: 12px; letter-spacing: .22em;
     text-transform: uppercase; color: var(--ink-quiet); cursor: pointer; padding: 12px 16px; -webkit-tap-highlight-color: transparent; }
   .of-btn:active { color: var(--ink); }
-  .of-sep { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-faint); opacity: .6; }
+  .of-sep { width: 1px; height: 12px; border-radius: 0; background: var(--ink-faint); opacity: .5; }   /* a pipe, not a dot */
   /* burn lives in the footer too — press and hold to confirm (no trash) */
   .of-btn.burn { position: relative; color: color-mix(in srgb, var(--ember) 72%, var(--ink-quiet)); }
   .of-fill { position: absolute; left: 16px; right: 16px; bottom: 7px; height: 2px; background: var(--ember);
@@ -1049,6 +1220,7 @@
     <div class="page-dim" id="pageDim" aria-hidden="true"></div>
   </div>
 
+  <div class="feather" id="feather" aria-hidden="true"></div>
   <div class="hints dim" id="hints">
     <span class="hints-group" id="hintsNormal">
       <span class="hint hint-btn" id="hintKeep"><span class="k">&#8984;S</span><span class="l">keep</span></span>
@@ -1068,51 +1240,104 @@
 
   <div class="settings-scrim" id="settingsScrim" aria-hidden="true"></div>
   <div class="settings" id="settings" hidden>
-    <div class="settings-title">settings</div>
     <div class="setstats" id="setStats" aria-hidden="true"><span id="setStatsWords"></span><span id="setStatsPages"></span><span id="setStatsTime"></span></div>
-    <div class="setrow setrow-seg">
-      <span class="seg" id="themePick" role="radiogroup" aria-label="Theme">
-        <button type="button" class="seg-opt" data-theme="">light</button>
-        <button type="button" class="seg-opt" data-theme="dark">dark</button>
-        <button type="button" class="seg-opt" data-theme="amber">amber</button>
-        <button type="button" class="seg-opt" data-theme="dispatch">dispatch</button>
-      </span>
-    </div>
-    <div class="setrow setrow-seg">
-      <span class="seg" id="spacePick" role="radiogroup" aria-label="Line spacing">
-        <button type="button" class="seg-opt" data-space="1">tight</button>
-        <button type="button" class="seg-opt" data-space="1.5">normal</button>
-        <button type="button" class="seg-opt" data-space="2">air</button>
-      </span>
+    <!-- theme + line spacing. Mac: pinned at the top, stacked. iOS: moved to the
+         bottom (thumb reach) and laid out side by side — spacing left, theme right. -->
+    <div class="setpair">
+      <div class="setrow setrow-seg setseg-theme">
+        <span class="seg" id="themePick" role="radiogroup" aria-label="Theme">
+          <button type="button" class="seg-opt" data-theme="">day</button>
+          <button type="button" class="seg-opt" data-theme="dark">night</button>
+          <button type="button" class="seg-opt" data-theme="amber">amber</button>
+          <button type="button" class="seg-opt" data-theme="dispatch">dispatch</button>
+        </span>
+      </div>
+      <div class="setrow setrow-seg setseg-space">
+        <span class="seg" id="spacePick" role="radiogroup" aria-label="Line spacing">
+          <button type="button" class="seg-opt" data-space="1">tight</button>
+          <button type="button" class="seg-opt" data-space="1.5">normal</button>
+          <button type="button" class="seg-opt" data-space="2">loose</button>
+          <button type="button" class="seg-opt" data-space="4">wide</button>
+        </span>
+      </div>
     </div>
     <div class="setdiv"></div>
-    <label class="setrow"><span>Zen mode <span class="info" tabindex="0">i<span class="tip">Goes fullscreen. Just you and the page. ⌘⇧F to toggle, Esc to exit.</span></span></span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
-    <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top <span class="info" tabindex="0">i<span class="tip">Keeps the type window above all others. Good for jotting while reading something else.</span></span></span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
-    <label class="setrow" id="rowEditable"><span>Editable page <span class="info" tabindex="0">i<span class="tip">Off, it's a typewriter: a finished line is locked. On, the page is editable — tap or arrow anywhere in what you've written and fix it. Set it before you start; it locks in once you've typed.</span></span></span><input type="checkbox" id="setEditable" /><span class="sw"></span></label>
-    <label class="setrow"><span>Burn if I stop</span><span class="setpick burnsecs" id="burnAfterVal" hidden>10s</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
-    <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
-    <label class="setrow"><span>Pages</span><input type="checkbox" id="setPages" /><span class="sw"></span></label>
-    <label class="setrow"><span>Timer</span><input type="checkbox" id="setTimer" /><span class="sw"></span></label>
-    <div class="setdiv"></div>
-    <label class="setrow"><span>Sound</span><input type="checkbox" id="setSound" /><span class="sw"></span></label>
-    <div class="sound-details" id="soundDetails" hidden>
-      <label class="setrow setrow-sub"><span>Keystroke click</span><input type="checkbox" id="setClicks" /><span class="sw"></span></label>
-      <label class="setrow setrow-sub"><span>Carriage return</span><input type="checkbox" id="setCarriage" /><span class="sw"></span></label>
-      <label class="setrow setrow-sub"><span>Margin bell</span><input type="checkbox" id="setBell" /><span class="sw"></span></label>
-    </div>
-    <label class="setrow" id="rowHaptics" hidden><span>Haptics</span><input type="checkbox" id="setHaptics" /><span class="sw"></span></label>
-    <label class="setrow"><span>Autocorrect</span><input type="checkbox" id="setAutocorrect" /><span class="sw"></span></label>
-    <div class="setdiv"></div>
-    <div class="settings-title">quotes</div>
-    <label class="setrow"><span>On startup</span><input type="checkbox" id="setQuoteOpen" /><span class="sw"></span></label>
-    <label class="setrow"><span>On burn</span><input type="checkbox" id="setQuoteBurn" /><span class="sw"></span></label>
-    <div class="setdiv" id="saveDiv" hidden></div>
-    <div class="settings-title" id="saveTitle" hidden>save as .md to <span class="info" tabindex="0">i<span class="tip">Point this at your Obsidian vault, or any notes folder. Kept pages land straight in your notes. Plain markdown, no import step.</span></span></div>
-    <div class="setrow setrow-btn" id="rowSaveFolder" hidden>
-      <span class="setval" id="saveFolderLabel">Downloads</span>
-      <span class="setpick">choose…</span>
-    </div>
+
+    <!-- Writing -->
+    <section class="setgroup" data-group="writing">
+      <button type="button" class="setgroup-head" aria-expanded="false">Writing<span class="chev"></span></button>
+      <div class="setgroup-body">
+        <label class="setrow" id="rowEditable"><span>Editable page <span class="info" tabindex="0">i<span class="tip">Off, it's a typewriter: a finished line is locked. On, the page is editable — tap or arrow anywhere in what you've written and fix it. Set it before you start; it locks in once you've typed.</span></span></span><input type="checkbox" id="setEditable" /><span class="sw"></span></label>
+        <label class="setrow"><span>Autocorrect</span><input type="checkbox" id="setAutocorrect" /><span class="sw"></span></label>
+        <label class="setrow"><span>Burn if I stop</span><span class="setpick burnsecs" id="burnAfterVal" hidden>10s</span><input type="checkbox" id="setSmolder" /><span class="sw"></span></label>
+        <label class="setrow"><span>Quote on startup</span><input type="checkbox" id="setQuoteOpen" /><span class="sw"></span></label>
+        <label class="setrow"><span>Quote on burn</span><input type="checkbox" id="setQuoteBurn" /><span class="sw"></span></label>
+      </div>
+    </section>
+
+    <!-- Display -->
+    <section class="setgroup" data-group="display">
+      <button type="button" class="setgroup-head" aria-expanded="false">Display<span class="chev"></span></button>
+      <div class="setgroup-body">
+        <label class="setrow"><span>Word count</span><input type="checkbox" id="setWordCount" /><span class="sw"></span></label>
+        <label class="setrow"><span>Pages</span><input type="checkbox" id="setPages" /><span class="sw"></span></label>
+        <label class="setrow"><span>Timer</span><input type="checkbox" id="setTimer" /><span class="sw"></span></label>
+        <label class="setrow"><span>Zen mode <span class="info" tabindex="0">i<span class="tip">Goes fullscreen. Just you and the page. ⌘⇧F to toggle, Esc to exit.</span></span></span><input type="checkbox" id="setZen" /><span class="sw"></span></label>
+        <label class="setrow setrow-onTop" id="rowOnTop" hidden><span>Stay on top <span class="info" tabindex="0">i<span class="tip">Keeps the type window above all others. Good for jotting while reading something else.</span></span></span><input type="checkbox" id="setOnTop" /><span class="sw"></span></label>
+      </div>
+    </section>
+
+    <!-- Sound -->
+    <section class="setgroup" data-group="sound">
+      <button type="button" class="setgroup-head" aria-expanded="false">Sound<span class="chev"></span></button>
+      <div class="setgroup-body">
+        <label class="setrow"><span>Keystroke click</span><input type="checkbox" id="setClicks" /><span class="sw"></span></label>
+        <label class="setrow"><span>Carriage return</span><input type="checkbox" id="setCarriage" /><span class="sw"></span></label>
+        <label class="setrow"><span>Margin bell</span><input type="checkbox" id="setBell" /><span class="sw"></span></label>
+        <label class="setrow" id="rowHaptics" hidden><span>Haptics</span><input type="checkbox" id="setHaptics" /><span class="sw"></span></label>
+      </div>
+    </section>
+
+    <!-- Saving -->
+    <section class="setgroup" data-group="saving">
+      <button type="button" class="setgroup-head" aria-expanded="false">Saving<span class="chev"></span></button>
+      <div class="setgroup-body">
+        <label class="setrow" id="rowICloud" hidden><span>iCloud sync <span class="info" tabindex="0">i<span class="tip">Your writing syncs across your own devices through iCloud, and since type has no server, we never see your pages. Turn sync off to save somewhere else for now; turn it back on to return to your type folder.</span></span></span><input type="checkbox" id="setICloud" /><span class="sw"></span></label>
+        <div class="setrow setrow-btn" id="rowSaveFolder" hidden>
+          <span class="setval" id="saveFolderLabel">Downloads</span>
+          <span class="setpick">choose…</span>
+        </div>
+        <div class="setcaption" id="saveTitle" hidden><span class="tip"></span></div>
+        <div id="saveDiv" hidden></div>
+      </div>
+    </section>
     <div class="setversion" id="setVersion" aria-hidden="true"></div>
+  </div>
+
+  <!-- first launch: where should writing live? (desktop only) -->
+  <div class="welcome-modal" id="welcomeModal" hidden role="dialog" aria-modal="true" aria-label="Where should your writing live?">
+    <div class="welcome-card">
+      <div class="welcome-mark">type<span class="dot">.</span></div>
+      <div id="welcomeChoice">
+        <p class="welcome-lead">Where should your writing live?</p>
+        <button type="button" class="welcome-btn primary" id="welcomeICloud">
+          <span class="wb-title">Sync with iCloud</span>
+          <span class="wb-sub">On all your devices. Private — type has no server, so we never see your pages. You're just syncing your own machines.</span>
+        </button>
+        <button type="button" class="welcome-btn" id="welcomeFolder">
+          <span class="wb-title">Just pick a folder</span>
+          <span class="wb-sub">No iCloud. Save wherever you like — an Obsidian vault, Dropbox, anywhere.</span>
+        </button>
+        <p class="welcome-foot">You can change this anytime in settings.</p>
+      </div>
+      <div id="welcomeDone" hidden>
+        <p class="welcome-lead" id="welcomeDoneTitle">You're all set</p>
+        <p class="welcome-done-body" id="welcomeDoneBody"></p>
+        <button type="button" class="welcome-btn primary welcome-start" id="welcomeStart"><span class="wb-title">Start writing</span></button>
+        <p class="welcome-foot"><span class="welcome-link" id="welcomeShowFolder">Show me the folder</span> · change anytime in settings</p>
+        <p class="welcome-foot welcome-back-line" id="welcomeBackLine" hidden><span class="welcome-link" id="welcomeBack">← Pick a folder instead</span></p>
+      </div>
+    </div>
   </div>
 
   <div class="float-tip" id="floatTip" role="tooltip" aria-hidden="true"></div>
@@ -1121,6 +1346,7 @@
   <div class="kept-scrim" id="keptScrim" aria-hidden="true"></div>
   <div class="kept-screen" id="keptScreen" aria-hidden="true">
     <button class="kept-grab" id="keptGrab" type="button" aria-label="back to writing"></button>
+    <button class="kept-esc" id="keptEsc" type="button" aria-label="close">esc</button>
     <div class="kept-head">
       <div class="kept-actions">
         <button class="kept-icon" id="keptSearchBtn" type="button" aria-label="search">
@@ -1234,15 +1460,16 @@
   })();
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, haptics: true, autocorrect: false, quoteOpen: true, quoteBurn: true, saveDir: '', lineSpace: 1.5 };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, haptics: true, autocorrect: false, quoteOpen: true, quoteBurn: true, saveDir: '', lineSpace: 1.5, onboarded: false, groupsOpen: {} };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
+  settings.sound = true;   // no in-app master mute — the three sound toggles gate themselves; the OS handles silence
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
   const THEMES = ['dark', 'amber', 'dispatch'];
   const applyTheme = () => {
     THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), editable: document.getElementById('setEditable'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), haptics: document.getElementById('setHaptics'), autocorrect: document.getElementById('setAutocorrect'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), editable: document.getElementById('setEditable'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), haptics: document.getElementById('setHaptics'), autocorrect: document.getElementById('setAutocorrect'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
@@ -1255,7 +1482,6 @@
       if (k === 'onTop') applyOnTop();
       if (k === 'smolder') { if (settings.smolder) scheduleSmolder(); else coolSmolder(); updateBurnAfter(); }
       if (k === 'wordCount' || k === 'pages' || k === 'timer') updateMeter();
-      if (k === 'sound') applySoundDetails();
       if (k === 'autocorrect') applyAutocorrect();
       if (k === 'editable') { applyEditable(); syncEditableSurface(); positionEditCaret(); }
     });
@@ -1390,11 +1616,30 @@
   });
   syncSpacePick();
   applyLineSpace();
+
+  // Collapsible settings groups: tap a header to open/close. The toggles inside
+  // are independent — tapping a header never flips a switch. Open/closed state
+  // is remembered per group. Everything starts collapsed so the panel is short.
+  document.querySelectorAll('.setgroup').forEach((g) => {
+    const key = g.dataset.group;
+    const head = g.querySelector('.setgroup-head');
+    // default every group OPEN; only honor an explicit collapse the user saved
+    const stored = settings.groupsOpen ? settings.groupsOpen[key] : undefined;
+    const open = (stored === undefined) ? true : !!stored;
+    g.classList.toggle('open', open);
+    head.setAttribute('aria-expanded', String(open));
+    head.addEventListener('click', () => {
+      const now = !g.classList.contains('open');
+      g.classList.toggle('open', now);
+      head.setAttribute('aria-expanded', String(now));
+      settings.groupsOpen = settings.groupsOpen || {};
+      settings.groupsOpen[key] = now;
+      saveSettings();
+    });
+  });
+
   // Sound has 3 sub-toggles (clicks / carriage / bell) that only matter when
   // sound is on — keep them tucked away otherwise to keep the panel short.
-  const soundDetails = document.getElementById('soundDetails');
-  const applySoundDetails = () => { soundDetails.hidden = !settings.sound; };
-  applySoundDetails();
   // apply the autocorrect setting to the textarea at load (the live platen line
   // doesn't exist yet — renderActive sets it from settings.autocorrect when built)
   if (editSurface) editSurface.setAttribute('autocorrect', settings.autocorrect ? 'on' : 'off');
@@ -1422,22 +1667,53 @@
     const show = () => {
       const r = infoEl.getBoundingClientRect();
       floatTip.textContent = src.textContent;     // read live — iOS rewrites the save tip
-      floatTip.style.top = (r.top + r.height / 2) + 'px';
+      if (document.body.classList.contains('ios')) {
+        // a callout that hangs just under the (i), with an arrow pointing up at it
+        const W = Math.min(window.innerWidth * 0.82, 340);
+        let left = r.left + r.width / 2 - W / 2;
+        left = Math.max(12, Math.min(left, window.innerWidth - W - 12));
+        floatTip.style.left = left + 'px';
+        floatTip.style.top = (r.bottom + 12) + 'px';
+        floatTip.style.width = W + 'px';
+        floatTip.style.setProperty('--arrow-x', (r.left + r.width / 2 - left) + 'px');
+      } else {
+        floatTip.style.top = (r.top + r.height / 2) + 'px';
+      }
       floatTip.classList.add('show');
     };
-    const hide = () => floatTip.classList.remove('show');
-    infoEl.addEventListener('mouseenter', show);
-    infoEl.addEventListener('mouseleave', hide);
-    infoEl.addEventListener('focus', show);
-    infoEl.addEventListener('blur', hide);
-    // touch: the info mark sits inside the row's <label>, so a tap would also
-    // flip the switch. Swallow that — a tap on (i) only shows the tip (and
-    // toggles it off / auto-hides), it never toggles the setting.
-    let tipTimer = null;
+    function onAway(e) {
+      if (floatTip.contains(e.target)) return;                       // tapping the tip itself stays
+      const row = infoEl.closest('.setrow');
+      if (infoEl.contains(e.target) || (row && row.contains(e.target))) return;   // its own row toggles it
+      hide();
+    }
+    const hide = () => { floatTip.classList.remove('show'); document.removeEventListener('pointerdown', onAway, true); };
+    // desktop hover; everywhere a tap opens it and it STAYS until you tap away
+    // (no timer). The switch and the (i) live in the same row, so the row routes
+    // taps here without ever flipping the setting.
+    const hoverDevice = matchMedia('(hover: hover)').matches;
+    if (hoverDevice) {
+      infoEl.addEventListener('mouseenter', show);
+      infoEl.addEventListener('mouseleave', hide);
+      infoEl.addEventListener('focus', show);
+      infoEl.addEventListener('blur', hide);
+    }
     infoEl.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
-      if (floatTip.classList.contains('show')) { hide(); clearTimeout(tipTimer); }
-      else { show(); clearTimeout(tipTimer); tipTimer = setTimeout(hide, 4500); }
+      if (floatTip.classList.contains('show')) { hide(); }
+      else { show(); setTimeout(() => document.addEventListener('pointerdown', onAway, true), 0); }
+    });
+  });
+
+  // on rows that carry an (i): the SWITCH toggles, and tapping anywhere else on
+  // the label opens the tooltip (a big, easy target — no need to hit the tiny i)
+  settingsEl.querySelectorAll('.setrow').forEach((row) => {
+    const info = row.querySelector('.info');
+    if (!info) return;
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.sw') || e.target.tagName === 'INPUT') return;   // the switch itself
+      e.preventDefault();
+      if (!e.target.closest('.info')) info.click();   // the (i) handles its own taps; the rest of the label routes here
     });
   });
 
@@ -1450,7 +1726,17 @@
     document.getElementById('saveDiv').hidden = false;
     document.getElementById('saveTitle').hidden = false;
     rowSaveFolder.hidden = false;
-    saveFolderLabel.textContent = folderName(settings.saveDir);
+    // show the active folder: a picked one by its name, otherwise the resolved
+    // default — "iCloud Drive · type" (synced with iPhone), or "Downloads" when
+    // iCloud Drive is off
+    const refreshSaveLabel = async () => {
+      if (settings.saveDir) { saveFolderLabel.textContent = folderName(settings.saveDir); return; }
+      try {
+        const def = window.typeAPI.defaultSaveDir && await window.typeAPI.defaultSaveDir();
+        saveFolderLabel.textContent = (def && def.label) || 'Downloads';
+      } catch (e) { saveFolderLabel.textContent = 'Downloads'; }
+    };
+    refreshSaveLabel();
     // the folder name is a link — click it to open the folder in Finder
     saveFolderLabel.classList.add('setlink');
     saveFolderLabel.title = 'open in Finder';
@@ -1458,16 +1744,114 @@
       e.stopPropagation();
       if (window.typeAPI.openFolder) window.typeAPI.openFolder(settings.saveDir || null);
     });
-    // "choose…" picks a different folder
+    // iCloud sync toggle: ON ⇒ use the iCloud default (clear any picked folder);
+    // OFF ⇒ pick a folder to save to instead. Empty saveDir = on iCloud.
+    const icBox = document.getElementById('setICloud');
+    document.getElementById('rowICloud').hidden = false;
+    const syncICloudBox = () => { icBox.checked = !settings.saveDir; };
+    syncICloudBox();
+    icBox.addEventListener('change', async () => {
+      if (icBox.checked) {
+        settings.saveDir = ''; saveSettings(); await refreshSaveLabel();   // back to the iCloud “type” folder, one tap
+      } else {
+        const dir = await window.typeAPI.pickFolder();
+        if (dir) { settings.saveDir = dir; saveSettings(); saveFolderLabel.textContent = folderName(dir); }
+        else { icBox.checked = true; }   // cancelled — stay on iCloud
+      }
+    });
+    // "choose…" picks a different folder (which switches off iCloud)
     const chooseBtn = rowSaveFolder.querySelector('.setpick');
     (chooseBtn || rowSaveFolder).addEventListener('click', async (e) => {
       e.stopPropagation();
       const dir = await window.typeAPI.pickFolder();
-      if (dir) { settings.saveDir = dir; saveSettings(); saveFolderLabel.textContent = folderName(dir); }
+      if (dir) { settings.saveDir = dir; saveSettings(); saveFolderLabel.textContent = folderName(dir); syncICloudBox(); }
     });
     const dTip = document.getElementById('saveTitle').querySelector('.tip');
-    if (dTip) dTip.textContent = 'Kept pages are plain .md files. Click the folder name to open it in Finder. Choose any folder — point it at your iCloud “type” folder to sync with iPhone, or your Obsidian vault. No iCloud needed; without it they just stay on this Mac.';
+    if (dTip) dTip.textContent = 'Plain .md files. With iCloud sync on they live in a “type” folder in iCloud Drive and sync to your other devices automatically. Turn it off to pick any folder — your Obsidian vault, Dropbox, anywhere.';
     document.getElementById('rowOnTop').hidden = false;   // window-level toggle, desktop only
+
+    // on Mac the engine can only underline misspellings, not auto-replace like
+    // iOS — so call it what it does: "Spell check"
+    const _acLabel = document.getElementById('setAutocorrect').closest('.setrow').querySelector('span');
+    if (_acLabel) _acLabel.textContent = 'Spell check';
+
+    // lift "settings" out of the bottom bar into a top-right hamburger (mirrors
+    // iOS); KEEP · BURN then sit alone at the bottom. Same glyph as iOS.
+    hintSettings.classList.add('corner-settings');
+    hintSettings.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-label="settings"><path d="M4 7h16M10 12h10M14 17h6"/></svg>';
+    const _settingsSep = hintSettings.previousElementSibling;   // drop the now-dangling separator after BURN
+    if (_settingsSep && _settingsSep.classList.contains('sep')) _settingsSep.style.display = 'none';
+
+    // browse old sheets: a "kept" entry between KEEP and BURN, opened by ⌘K.
+    // Mirrors iOS's center pull, but as a click + shortcut (no grab bar). The
+    // kept roll itself scrolls by wheel/trackpad — the visual scroll.
+    (function addKeptEntry() {
+      const hn = document.getElementById('hintsNormal');
+      const burn = document.getElementById('hintBurn');
+      const kept = document.createElement('span');
+      kept.className = 'hint hint-btn'; kept.id = 'hintKept';
+      kept.innerHTML = '<span class="l">kept</span>';
+      const sep = document.createElement('span'); sep.className = 'sep';
+      hn.insertBefore(kept, burn); hn.insertBefore(sep, burn);   // KEEP · kept · BURN
+      kept.addEventListener('click', () => Kept.open());
+    })();
+    // ⌘K is reserved for a future command palette — kept opens by click for now.
+
+    // hover a bottom word → a small frosted tip with its shortcut (same look as
+    // the settings info tips)
+    const hintTip = document.createElement('div');
+    hintTip.className = 'hint-tip';
+    document.body.appendChild(hintTip);
+    const HINT_KEYS = { hintKeep: '⌘S', hintKept: '⌘⇧K', hintBurn: '⌘B' };
+    Object.entries(HINT_KEYS).forEach(([id, label]) => {
+      const el = document.getElementById(id); if (!el) return;
+      el.addEventListener('mouseenter', () => {
+        const r = el.getBoundingClientRect();
+        hintTip.textContent = label;
+        hintTip.style.left = (r.left + r.width / 2) + 'px';
+        hintTip.style.top = r.top + 'px';
+        hintTip.classList.add('show');
+      });
+      el.addEventListener('mouseleave', () => hintTip.classList.remove('show'));
+    });
+
+    // first launch: ask where writing should live, then confirm in plain words
+    if (!settings.onboarded) {
+      const wm = document.getElementById('welcomeModal');
+      const choiceView = document.getElementById('welcomeChoice');
+      const doneView = document.getElementById('welcomeDone');
+      wm.hidden = false;
+      const showDone = (title, body) => {
+        document.getElementById('welcomeDoneTitle').textContent = title;
+        document.getElementById('welcomeDoneBody').textContent = body;
+        document.getElementById('welcomeBackLine').hidden = true;
+        choiceView.hidden = true; doneView.hidden = false;
+      };
+      const commit = () => { settings.onboarded = true; saveSettings(); syncICloudBox(); refreshSaveLabel(); };
+      document.getElementById('welcomeICloud').addEventListener('click', async () => {
+        settings.saveDir = ''; commit();
+        // is iCloud Drive actually on? the default lands on the iCloud folder only if so
+        let onICloud = true;
+        try { const def = await window.typeAPI.defaultSaveDir(); onICloud = !!(def && def.icloud); } catch (e) {}
+        if (onICloud) {
+          showDone('iCloud sync is on', 'Your writing saves to a “type” folder in iCloud Drive and syncs to your iPhone and other Macs automatically. type has no server — we never see it.');
+        } else {
+          showDone('iCloud Drive is off', 'To sync across your devices, turn on iCloud Drive in your Mac’s System Settings, then reopen type. For now, your writing saves to your Downloads folder on this Mac.');
+          document.getElementById('welcomeBackLine').hidden = false;   // let them pick a folder instead
+        }
+      });
+      document.getElementById('welcomeBack').addEventListener('click', () => { doneView.hidden = true; choiceView.hidden = false; });
+      document.getElementById('welcomeFolder').addEventListener('click', async () => {
+        const dir = await window.typeAPI.pickFolder();
+        if (!dir) return;   // cancelled — stay on the choice
+        settings.saveDir = dir; commit();
+        showDone('All set', 'Your writing saves to “' + folderName(dir) + '”. No iCloud — it stays in that folder on this Mac.');
+      });
+      document.getElementById('welcomeStart').addEventListener('click', () => { wm.hidden = true; });
+      document.getElementById('welcomeShowFolder').addEventListener('click', () => {
+        if (window.typeAPI.openFolder) window.typeAPI.openFolder(settings.saveDir || null);
+      });
+    }
   }
 
   /* ================= ZEN / STAY-ON-TOP ================= */
@@ -1658,13 +2042,6 @@
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(lp).connect(g).connect(ctx.destination); src.start(t); src.stop(t + dur);
   }
-  function setSound(on) {
-    settings.sound = on;
-    boxes.sound.checked = on;
-    saveSettings();
-    if (on) { AC(); bell(0.07); }
-  }
-
   // Safari/iOS won't make sound until the audio context is unlocked inside a real gesture
   let audioReady = false;
   function unlockAudio() {
@@ -3296,6 +3673,9 @@
       if (!settingsEl.hidden) { e.preventDefault(); settingsEl.hidden = true; return; }
       if (feedbackMode) { e.preventDefault(); exitFeedbackMode(false); return; }
       if (cursor) { e.preventDefault(); exitOverstrike(); return; }
+      // browsing kept? let the kept browser own Esc (close sheet → search →
+      // drawer) and DON'T fall through to exiting Zen
+      if (document.body.classList.contains('reviewing')) return;
       // exit Zen mode if currently in it — macOS native fullscreen doesn't
       // respond to Esc by default, so we wire it here explicitly
       if (settings.zen) {
@@ -3308,7 +3688,6 @@
       }
       return;
     }
-    if (e.ctrlKey && (e.key === 'm' || e.key === 'M')) { e.preventDefault(); setSound(!settings.sound); return; }
     // ⌘⇧F toggles Zen. macOS's system "Toggle Full Screen" (⌃⌘F) still works
     // as a backup via the menu — main process keeps settings + checkbox in sync.
     if (e.metaKey && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
@@ -3652,21 +4031,32 @@
     const zenRow = boxes.zen.closest('.setrow'); if (zenRow) zenRow.hidden = true;
     document.getElementById('rowHaptics').hidden = false;   // the phone has a body — let it be tuned
     quoteShare.remove();
-    document.getElementById('saveDiv').hidden = false;
-    document.getElementById('saveTitle').hidden = false;
+    // Saving: an iCloud sync toggle + the folder. The "type" iCloud folder is
+    // the default; turning sync off lets you pick any Files-reachable folder.
+    // The explanation lives behind the (i), not as a wall of copy in the open.
     rowSaveFolder.hidden = false;
-    saveFolderLabel.textContent = settings.iosFolder || 'iCloud Drive · type';
+    document.getElementById('rowICloud').hidden = false;
+    document.getElementById('saveTitle').hidden = true;
+    const icBox = document.getElementById('setICloud');
+    const setLabel = () => { saveFolderLabel.textContent = settings.iosFolder || 'iCloud Drive · type'; };
+    const syncBox  = () => { icBox.checked = !settings.iosFolder; };   // empty folder = on iCloud
+    setLabel(); syncBox();
+    icBox.addEventListener('change', async () => {
+      if (icBox.checked) {
+        settings.iosFolder = ''; saveSettings(); setLabel();
+        if (window.typeAPI.clearFolder) window.typeAPI.clearFolder();   // forget the picked folder → saves return home to iCloud
+      }
+      else {
+        const res = window.typeAPI.pickFolder && await window.typeAPI.pickFolder();
+        if (res && res.name) { settings.iosFolder = res.name; saveSettings(); setLabel(); }
+        else { icBox.checked = true; }   // cancelled — stay on iCloud
+      }
+    });
     rowSaveFolder.addEventListener('click', async () => {
       if (!window.typeAPI.pickFolder) return;
       const res = await window.typeAPI.pickFolder();
-      if (res && res.name) {
-        settings.iosFolder = res.name;
-        saveSettings();
-        saveFolderLabel.textContent = res.name;
-      }
+      if (res && res.name) { settings.iosFolder = res.name; saveSettings(); setLabel(); syncBox(); }
     });
-    const saveTip = document.getElementById('saveTitle').querySelector('.tip');
-    if (saveTip) saveTip.textContent = 'Kept pages are plain .md files. By default they go to a “type” folder in iCloud Drive — open it in the Files app, and it syncs to your Mac automatically. Choose any other folder the Files app can reach (your Obsidian vault, etc.). No iCloud? They save on this iPhone and stay here.';
   })();
 
   /* ===================== KEPT NOTES (review) =====================
@@ -4038,6 +4428,7 @@
 
     // ----- header: grab handle → back to writing, hamburger → settings -----
     document.getElementById('keptGrab').addEventListener('click', close);
+    document.getElementById('keptEsc').addEventListener('click', close);
     const keptScrim = document.getElementById('keptScrim');
     if (keptScrim) keptScrim.addEventListener('click', close);   // tap the peeking page to return
     // settings isn't here — it lives on the writing screen's hamburger. The
@@ -4132,6 +4523,13 @@
     // desktop / browser entry for testing (no touch wordmark there)
     window.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); toggle(); }
+      // arrow keys move between sheets; Enter opens the centered one
+      if (document.body.classList.contains('reviewing') && !keptScreen.querySelector('.opened') && searchBox.hidden) {
+        const N = view.length;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); glideTo(Math.min(N - 1, Math.round(pos) + 1)); return; }
+        if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); glideTo(Math.max(0, Math.round(pos) - 1)); return; }
+        if (e.key === 'Enter') { e.preventDefault(); const c = view[Math.round(pos)]; if (c) openPage(c); return; }
+      }
       if (e.key === 'Escape' && document.body.classList.contains('reviewing')) {
         const o = keptScreen.querySelector('.opened'); if (o) { o.classList.add('closing'); setTimeout(() => o.remove(), 240); return; }
         if (!searchBox.hidden) { closeSearch(); return; }

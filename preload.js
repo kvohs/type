@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('typeAPI', {
   isDesktop: true,
   version: TYPE_VERSION,
   pickFolder: () => ipcRenderer.invoke('type:pick-folder'),
+  defaultSaveDir: () => ipcRenderer.invoke('type:default-save-dir'),   // { dir, icloud, label } for the settings folder label
   openFolder: (dir) => ipcRenderer.invoke('type:open-folder', dir || null),   // reveal the save folder in Finder
   saveNote: (payload) => ipcRenderer.invoke('type:save-note', payload),
   // kept-notes review: read / open / delete the .md files in the save folder

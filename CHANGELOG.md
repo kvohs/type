@@ -6,6 +6,16 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.9.0
+
+### New
+- **Undo, redo, and real selection.** The writing line is now built on macOS's own text engine, so ⌘Z undoes, ⌘⇧Z redoes, and you can select, copy, and paste like in any native field — dictation works too. The typewriter feel is unchanged: committed lines still lock, and the block cursor still rides the strike line. But the text underneath is solid now, so the occasional doubled cursor and dropped/scrambled characters are gone.
+- **Line spacing.** A new tight / normal / air control in settings sets how much room each line gets — a dense draft or a wide, airy page.
+- **Autocorrect.** A settings toggle, off by default so the typewriter stays literal. Turn it on to let macOS fix spelling as you write.
+- **Your kept pages, in the app.** The review drawer reads the real `.md` files in your save folder, so you can browse, search, and reopen what you've written. Share a kept page to the system share sheet, or click the folder name in settings to open it in Finder.
+
+---
+
 ## v1.8.0
 
 ### New

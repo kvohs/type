@@ -4,6 +4,7 @@ dist/
 *.DS_Store
 ios/type/web/index.html
 ios/type/web/quotes.js
+ios/type/web/native.html
 ios/build/
 ios/DerivedData/
 __pycache__/

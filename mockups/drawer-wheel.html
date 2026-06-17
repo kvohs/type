@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>type — kept (platen wheel)</title>
+<style>
+  :root{
+    --paper:#141519; --ink:#e7e8ea; --ink-soft:#c4c6cb; --ink-quiet:#888b92;
+    --ink-faint:#3f424a; --accent:#df5a26; --rule:#23252b;
+    --mono:"Courier Prime","Courier New",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:#0a0b0d; color:var(--ink); font-family:var(--mono);
+    display:flex; flex-direction:column; align-items:center; gap:18px;
+    padding:26px 16px 50px; min-height:100%;
+  }
+  .bar{display:flex; align-items:center; gap:18px}
+  .toggle{display:flex; background:#16181c; border:1px solid #26282e; border-radius:13px; padding:5px; gap:4px}
+  .toggle button{border:0;background:none;color:var(--ink-quiet);font-family:inherit;cursor:pointer;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;padding:10px 18px;border-radius:9px}
+  .toggle button.on{background:var(--accent);color:#15110e;font-weight:700}
+  .lbl{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#6c6f76}
+  .hint{font-size:12px;letter-spacing:.08em;color:#6c6f76;text-align:center;max-width:540px;min-height:16px}
+  .hint .a{color:var(--accent)}
+
+  .phone{position:relative; width:380px; height:770px; border-radius:46px; overflow:hidden;
+    background:var(--paper);
+    box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 0 11px #1c1d22, 0 0 0 13px #2a2c32;
+    touch-action:none; user-select:none}
+  .status{position:absolute; top:0; left:0; right:0; height:52px; z-index:90;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 30px 0; font-size:14px; color:var(--ink-soft); pointer-events:none}
+  .status .r{font-size:12px}
+
+  /* ---- kept view (behind the paper) ---- */
+  .kept{position:absolute; inset:0; z-index:10; display:flex; flex-direction:column; background:#101115}
+  .ktop{display:flex; align-items:center; justify-content:space-between; padding:60px 24px 4px;
+    color:var(--ink-quiet)}
+  .ktop .wm{font-size:15px; font-weight:700; letter-spacing:.04em; color:var(--ink-soft)}
+  .ktop .wm .dot{color:var(--accent)}
+  .ktop .acts{display:flex; gap:14px}
+  .ktop button{border:0;background:none;color:var(--ink-quiet);font-family:inherit;cursor:pointer;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;padding:4px}
+  .ktop button:hover{color:var(--ink)} .ktop .burn:hover{color:var(--accent)}
+
+  .page{flex:1; overflow:hidden; padding:14px 34px 8px; position:relative}
+  .pstamp{font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:14px}
+  .pbody{font-size:18px; line-height:2.05; color:var(--ink)}
+  .pbody .period{color:var(--accent)}
+  .pbody div{transition:opacity .25s}
+  /* a little roll animation when the page changes */
+  .page.rolling .pbody{animation:roll .42s cubic-bezier(.22,.61,.36,1)}
+  @keyframes roll{0%{transform:translateY(26px);opacity:0}100%{transform:translateY(0);opacity:1}}
+
+  /* ---- the platen wheel ---- */
+  .platen{position:relative; height:148px; flex:none;
+    background:linear-gradient(#0d0e11,#191b20 18%,#23252c 50%,#191b20 82%,#0d0e11);
+    border-top:1px solid #2c2e35; box-shadow:inset 0 14px 26px rgba(0,0,0,.55), inset 0 -14px 26px rgba(0,0,0,.55)}
+  /* the strike line — selection sits here, same idea as the writing strike point */
+  .strike{position:absolute; top:0; bottom:0; left:50%; width:2px; margin-left:-1px; z-index:6;
+    background:linear-gradient(transparent,var(--accent) 22%,var(--accent) 78%,transparent)}
+  .strike::before,.strike::after{content:"";position:absolute;left:-4px;width:10px;height:6px;background:var(--accent);
+    clip-path:polygon(50% 100%,0 0,100% 0)} /* top caret */
+  .strike::before{top:8px} .strike::after{bottom:8px;transform:rotate(180deg)}
+  .reelwrap{position:absolute; inset:0; overflow:hidden}
+  .reel{position:absolute; top:0; bottom:0; left:0; display:flex; align-items:center; will-change:transform}
+  .tick{flex:none; width:90px; height:100%; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:10px; cursor:pointer}
+  .tick .bar{width:2px; height:26px; background:var(--ink-faint)}
+  .tick .dt{font-size:11px; letter-spacing:.12em; color:var(--ink-faint); text-transform:uppercase; white-space:nowrap}
+  .tick .wd{font-size:9px; letter-spacing:.1em; color:#34363d}
+  .tick.sel .bar{background:var(--accent); height:34px}
+  .tick.sel .dt{color:var(--accent)}
+  /* curved-cylinder edge fades */
+  .platen::before,.platen::after{content:"";position:absolute;top:0;bottom:0;width:96px;z-index:5;pointer-events:none}
+  .platen::before{left:0;background:linear-gradient(90deg,#15171c,transparent)}
+  .platen::after{right:0;background:linear-gradient(270deg,#15171c,transparent)}
+  .hintspin{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:9px;letter-spacing:.28em;
+    text-transform:uppercase;color:#3a3c43;z-index:6}
+
+  /* ---- the writing paper (top layer) ---- */
+  .stage{position:absolute; inset:0; background:var(--paper); z-index:30;
+    transition:transform .46s cubic-bezier(.22,.61,.36,1), border-radius .46s;
+    box-shadow:0 0 60px rgba(0,0,0,.5)}
+  .feed{position:absolute; left:34px; right:34px; top:50%; transform:translateY(-58%);
+    font-size:18px; line-height:2.05; color:var(--ink)}
+  .feed .q{color:var(--ink-soft)} .feed .period{color:var(--accent)}
+  .footmark{position:absolute; bottom:30px; left:0; right:0; text-align:center; z-index:31;
+    font-size:17px; font-weight:700; color:var(--ink-soft); opacity:.85}
+  .footmark .dot{color:var(--accent)}
+
+  /* the platen-knob opener — foreshadows the wheel */
+  .knob{position:absolute; bottom:26px; z-index:40; width:50px; height:50px; border-radius:50%;
+    background:radial-gradient(circle at 38% 32%, #2b2d34, #16171b 70%);
+    border:1px solid #34363d; box-shadow:0 6px 16px rgba(0,0,0,.5), inset 0 1px 1px rgba(255,255,255,.06);
+    cursor:pointer; display:flex; align-items:center; justify-content:center}
+  .knob::before{content:"";position:absolute;inset:8px;border-radius:50%;
+    background:repeating-conic-gradient(#3a3c44 0deg 9deg,#202228 9deg 18deg);opacity:.55}
+  .knob::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--accent);position:relative;z-index:2;
+    box-shadow:0 0 8px rgba(223,90,38,.6)}
+  .knob:hover{border-color:#45474f}
+
+  /* handedness */
+  .phone[data-hand="right"] .knob{right:26px}
+  .phone[data-hand="left"]  .knob{left:26px}
+  .phone[data-hand="right"] .stage{transform:translateX(0)}
+  .phone.open[data-hand="right"] .stage{transform:translateX(-101%)}
+  .phone.open[data-hand="left"]  .stage{transform:translateX(101%)}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <span class="lbl">Hand</span>
+    <div class="toggle">
+      <button id="hL">Left</button>
+      <button id="hR" class="on">Right</button>
+    </div>
+  </div>
+  <div class="hint" id="hint">Spin the <span class="a">knob</span> (bottom-right) — or just spin the wheel at the bottom. Drag it, scroll it, or tap a date. Past sheets roll down onto the platen.</div>
+
+  <div class="phone" id="phone" data-hand="right">
+    <div class="status"><span>5:32</span><span class="r">●●● 🔋</span></div>
+
+    <!-- kept view -->
+    <div class="kept">
+      <div class="ktop">
+        <span class="wm">type<span class="dot">.</span> · kept</span>
+        <span class="acts"><button>share</button><button class="burn">burn</button><button id="closeKept">‹ write</button></span>
+      </div>
+      <div class="page" id="page">
+        <div class="pstamp" id="pstamp"></div>
+        <div class="pbody" id="pbody"></div>
+      </div>
+      <div class="platen">
+        <div class="reelwrap"><div class="reel" id="reel"></div></div>
+        <div class="strike"></div>
+        <div class="hintspin">spin the platen</div>
+      </div>
+    </div>
+
+    <!-- writing paper -->
+    <div class="stage" id="stage">
+      <div class="feed"><div class="q">Most of us have two lives:</div><div class="q">the life we live, and the</div><div class="q">unlived life within us<span class="period">.</span></div></div>
+      <div class="footmark">type<span class="dot">.</span></div>
+      <button class="knob" id="knob" title="kept"></button>
+    </div>
+  </div>
+
+<script>
+  const NOTES=[
+    {date:"14 JUN 2026",words:84,body:["The unlived life within us is the","one Resistance guards. Every","morning it is the same","negotiation — sit down, or invent","a reason not to.","","Today I sat down."]},
+    {date:"12 JUN 2026",words:212,body:["Targeting in the second campaign","was off. Gregory flagged it on","the Next call: the audience","overlapped the first set by","almost half.","","Split them. Re-run Thursday."]},
+    {date:"09 JUN 2026",words:139,body:["Morning pages. Three things","before the noise starts and the","day decides for me what it is","going to be about."]},
+    {date:"03 JUN 2026",words:56,body:["A short one.","Keep it or it's gone."]},
+    {date:"28 MAY 2026",words:301,body:["The whole point is you can't go","back and fix the line. You commit","it the moment you move on.","","That constraint is the feature,","not the bug."]},
+    {date:"21 MAY 2026",words:97,body:["Notes from the walk. The idea","arrived between the third and","fourth block, the way they always","do once I stop reaching for it."]},
+    {date:"09 MAY 2026",words:64,body:["Test it on the phone first.","Everything reads differently","once it's in the hand."]},
+  ];
+
+  const ITEM=90;
+  const phone=document.getElementById('phone');
+  const reel=document.getElementById('reel');
+  const wrap=reel.parentElement;
+  const page=document.getElementById('page');
+  let sel=-1, offset=0, minOff=0, maxOff=0;
+
+  // build ticks
+  NOTES.forEach((n,i)=>{
+    const t=document.createElement('div'); t.className='tick';
+    t.innerHTML=`<div class="bar"></div><div class="dt">${n.date}</div><div class="wd">${n.words} words</div>`;
+    t.onclick=()=>{ snapTo(i); };
+    reel.appendChild(t);
+  });
+
+  function measure(){
+    const w=wrap.clientWidth; const pad=(w-ITEM)/2;
+    reel.style.paddingLeft=pad+'px'; reel.style.paddingRight=pad+'px';
+    // offset 0 → item 0 centered. each step left by ITEM centers next item.
+    minOff=-(NOTES.length-1)*ITEM; maxOff=0;
+  }
+  function render(updatePage){
+    offset=Math.max(minOff,Math.min(maxOff,offset));
+    reel.style.transform=`translateX(${offset}px)`;
+    const center=Math.round(-offset/ITEM);
+    [...reel.children].forEach((t,i)=>{
+      const d=Math.abs(i-(-offset/ITEM));
+      t.style.transform=`scale(${(1-Math.min(d,3)*0.13).toFixed(3)})`;
+      t.style.opacity=(1-Math.min(d,3)*0.26).toFixed(3);
+      t.classList.toggle('sel', i===center);
+    });
+    if(updatePage && center!==sel){ sel=center; showPage(NOTES[center]); }
+  }
+  function showPage(n){
+    document.getElementById('pstamp').textContent=n.date+' · '+n.words+' words kept';
+    document.getElementById('pbody').innerHTML=n.body.map(l=>`<div>${l||'&nbsp;'}</div>`).join('');
+    page.classList.remove('rolling'); void page.offsetWidth; page.classList.add('rolling');
+  }
+  function snapTo(i){ offset=-i*ITEM; reel.style.transition='transform .4s cubic-bezier(.22,.61,.36,1)';
+    render(true); setTimeout(()=>reel.style.transition='',400); }
+
+  // drag
+  let drag=null;
+  reel.parentElement.addEventListener('pointerdown',e=>{drag={x:e.clientX,o:offset};reel.style.transition='';reel.setPointerCapture?.(e.pointerId);});
+  window.addEventListener('pointermove',e=>{ if(!drag)return; offset=drag.o+(e.clientX-drag.x); render(true); });
+  window.addEventListener('pointerup',()=>{ if(!drag)return; drag=null; const i=Math.round(-offset/ITEM); snapTo(Math.max(0,Math.min(NOTES.length-1,i))); });
+  // wheel / trackpad
+  wrap.addEventListener('wheel',e=>{e.preventDefault(); offset-=(Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY); reel.style.transition=''; render(true);
+    clearTimeout(wrap._t); wrap._t=setTimeout(()=>{const i=Math.round(-offset/ITEM); snapTo(Math.max(0,Math.min(NOTES.length-1,i)));},120);},{passive:false});
+
+  // open / close
+  document.getElementById('knob').onclick=()=>{ phone.classList.add('open'); };
+  document.getElementById('closeKept').onclick=()=>{ phone.classList.remove('open'); };
+
+  // handedness
+  document.getElementById('hR').onclick=function(){phone.dataset.hand='right';this.classList.add('on');document.getElementById('hL').classList.remove('on');};
+  document.getElementById('hL').onclick=function(){phone.dataset.hand='left';this.classList.add('on');document.getElementById('hR').classList.remove('on');};
+
+  measure(); offset=0; render(true);
+  window.addEventListener('resize',()=>{measure();render(false);});
+</script>
+</body>
+</html>

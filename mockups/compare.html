@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>type — kept pages (compare)</title>
+<style>
+  :root{
+    --paper:#141519; --ink:#e7e8ea; --ink-soft:#c4c6cb; --ink-quiet:#888b92;
+    --ink-faint:#3f424a; --accent:#df5a26; --rule:#23252b;
+    --mono:"Courier Prime","Courier New",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:#0a0b0d; color:var(--ink); font-family:var(--mono);
+    display:flex; flex-direction:column; align-items:center; gap:20px;
+    padding:30px 16px 54px; min-height:100%;
+  }
+
+  /* ---- the toggle ---- */
+  .toggle{display:flex; background:#16181c; border:1px solid #26282e; border-radius:14px; padding:5px; gap:4px}
+  .toggle button{
+    border:0; background:none; color:var(--ink-quiet); font-family:inherit; cursor:pointer;
+    font-size:13px; letter-spacing:.16em; text-transform:uppercase; padding:11px 22px; border-radius:10px;
+  }
+  .toggle button.on{background:var(--accent); color:#15110e; font-weight:700}
+  .hint{font-size:12px; letter-spacing:.1em; color:#6c6f76; text-align:center; max-width:520px; min-height:16px}
+  .hint .a{color:var(--accent)}
+
+  /* ---- phone shell ---- */
+  .phone{
+    position:relative; width:380px; height:760px; border-radius:46px; overflow:hidden;
+    background:#0c0d10;
+    box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 0 11px #1c1d22, 0 0 0 13px #2a2c32;
+  }
+  .status{
+    position:absolute; top:0; left:0; right:0; height:52px; z-index:90;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 30px 0; font-size:14px; color:var(--ink-soft); pointer-events:none;
+  }
+  .status .r{font-size:12px}
+
+  .feed{position:absolute; left:34px; right:34px; top:50%; transform:translateY(-58%);
+    font-size:18px; line-height:2.05; color:var(--ink)}
+  .feed .q{color:var(--ink-soft)} .feed .period,.rbody .period{color:var(--accent)}
+  .opener{position:absolute; top:54px; z-index:40; border:0; background:none;
+    color:var(--ink-quiet); cursor:pointer; padding:6px}
+  .opener:hover{color:var(--ink)}
+  .footmark{position:absolute; bottom:30px; left:0; right:0; text-align:center; z-index:40;
+    font-size:17px; font-weight:700; color:var(--ink-soft); opacity:.85}
+  .footmark .dot{color:var(--accent)}
+
+  .wordmark{font-size:28px; font-weight:700; letter-spacing:-.01em}
+  .wordmark .dot{color:var(--accent)}
+  .sub{font-size:10px; letter-spacing:.3em; text-transform:uppercase; color:var(--ink-faint)}
+
+  /* kept list (shared look) */
+  .note{display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;font-family:inherit;
+    padding:12px 24px;border-top:1px solid var(--rule)}
+  .note .d{font-size:11px;letter-spacing:.16em;color:var(--ink-faint);text-transform:uppercase}
+  .note .s{font-size:14px;color:var(--ink-soft);margin-top:5px;
+    display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+  .note:hover .s{color:var(--ink)}
+
+  /* reader (shared) */
+  .reader{position:absolute; inset:0; z-index:80; background:var(--paper);
+    transform:translateY(101%); transition:transform .42s cubic-bezier(.22,.61,.36,1);
+    display:flex; flex-direction:column}
+  .phone.reading .reader{transform:translateY(0)}
+  .rbar{display:flex;align-items:center;justify-content:space-between;padding:60px 24px 12px;color:var(--ink-quiet)}
+  .rbar button{border:0;background:none;color:inherit;cursor:pointer;font-family:inherit;font-size:13px;
+    letter-spacing:.16em;text-transform:uppercase;padding:6px}
+  .rbar button:hover{color:var(--ink)} .rbar .burn:hover{color:var(--accent)}
+  .rstamp{padding:8px 34px 0;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint)}
+  .rbody{padding:14px 34px 40px;font-size:18px;line-height:2.05;color:var(--ink);overflow-y:auto}
+
+  /* ========== MODE A: single drawer ========== */
+  .drawerA{position:absolute; inset:0; padding:64px 0 24px; background:#101115; z-index:10;
+    display:flex; flex-direction:column}
+  .drawerA .head{padding:6px 24px 16px}
+  .srow{display:flex;align-items:center;gap:14px;padding:13px 24px;color:var(--ink-soft);font-size:16px}
+  .srow svg{width:18px;height:18px;opacity:.7}
+  .sectlabel{padding:20px 24px 6px;font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--ink-faint)}
+  .keptA{overflow-y:auto;flex:1}
+  .stageA{position:absolute; inset:0; background:var(--paper); z-index:30;
+    transition:transform .42s cubic-bezier(.22,.61,.36,1), border-radius .42s;
+    box-shadow:-22px 0 60px rgba(0,0,0,.5)}
+  .phone.openA .stageA{transform:translateX(80%) scale(.97); border-radius:30px}
+  .phone.openA .stageA::after{content:"";position:absolute;inset:0;background:rgba(10,11,13,.2)}
+  .gearA{right:26px}
+
+  /* ========== MODE B: layered rails ========== */
+  .rail2{position:absolute; inset:0; width:62%; padding:64px 0 24px; background:#0b0c0f; z-index:10;
+    display:flex; flex-direction:column}
+  .rail2 .head{padding:0 22px}
+  .rail1{position:absolute; inset:0; width:62%; padding:64px 22px 24px; background:#101115; z-index:20;
+    transition:transform .42s cubic-bezier(.22,.61,.36,1); box-shadow:18px 0 50px rgba(0,0,0,.45)}
+  .stageB{position:absolute; inset:0; background:var(--paper); z-index:30;
+    transition:transform .42s cubic-bezier(.22,.61,.36,1), border-radius .42s;
+    box-shadow:-22px 0 60px rgba(0,0,0,.55)}
+  .keptB{overflow-y:auto;flex:1;margin-top:8px}
+  .srowB{display:flex;align-items:center;justify-content:space-between;padding:14px 4px;color:var(--ink-soft);
+    font-size:15px;border-top:1px solid var(--rule)} .srowB:first-of-type{border-top:0}
+  .pill{width:38px;height:22px;border-radius:14px;background:#2a2c33;position:relative}
+  .pill.on{background:var(--accent)}
+  .pill::after{content:"";position:absolute;top:2.5px;left:2.5px;width:17px;height:17px;border-radius:50%;background:#e7e8ea}
+  .pill.on::after{left:18px}
+  .themes{display:flex;gap:9px;font-size:12px;color:var(--ink-faint)} .themes .on{color:var(--accent)}
+  .gearB{left:24px}
+  .phone[data-b="1"] .stageB{transform:translateX(30%) scale(.985); border-radius:28px}
+  .phone[data-b="1"] .stageB::after,.phone[data-b="2"] .stageB::after{content:"";position:absolute;inset:0;background:rgba(10,11,13,.22)}
+  .phone[data-b="2"] .stageB{transform:translateX(60%) scale(.97); border-radius:28px}
+  .phone[data-b="2"] .rail1{transform:translateX(30%)}
+  .phone[data-b="2"] .rail1::after{content:"";position:absolute;inset:0;background:rgba(8,9,11,.4)}
+
+  /* show only the active mode */
+  .modeA,.modeB{display:none}
+  .phone.isA .modeA{display:block}
+  .phone.isB .modeB{display:block}
+</style>
+</head>
+<body>
+  <div class="toggle">
+    <button id="btnA" class="on">Single drawer</button>
+    <button id="btnB">Layered rails</button>
+  </div>
+  <div class="hint" id="hint">Tap the <span class="a">gear</span> (top-right) to open. Tap a kept page to read it.</div>
+
+  <div class="phone isA" id="phone" data-b="0">
+    <div class="status"><span>5:32</span><span class="r">●●● 🔋</span></div>
+
+    <!-- shared paper feed text differs per mode opener position; keep one feed -->
+    <!-- ===== MODE A ===== -->
+    <div class="modeA">
+      <div class="drawerA">
+        <div class="head"><div class="wordmark">type<span class="dot">.</span></div><div class="sub" style="margin-top:6px">Kelly Vohs</div></div>
+        <div class="srow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </div>
+        <div class="sectlabel">Kept · iCloud Drive → type</div>
+        <div class="keptA" data-list></div>
+      </div>
+      <div class="stageA stage">
+        <button class="opener gearA" data-openA>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+        </button>
+        <div class="feed"><div class="q">Most of us have two lives:</div><div class="q">the life we live, and the</div><div class="q">unlived life within us<span class="period">.</span></div></div>
+        <div class="footmark">type<span class="dot">.</span></div>
+      </div>
+    </div>
+
+    <!-- ===== MODE B ===== -->
+    <div class="modeB">
+      <div class="rail2">
+        <div class="head"><div class="wordmark">Kept<span class="dot">.</span></div><div class="sub" style="margin-top:4px">iCloud Drive → type</div></div>
+        <div class="keptB" data-list></div>
+      </div>
+      <div class="rail1">
+        <div class="wordmark">type<span class="dot">.</span></div><div class="sub" style="margin:4px 0 14px">Settings</div>
+        <div class="srowB">Theme <span class="themes"><span>light</span><span>dark</span><span class="on">amber</span><span>dispatch</span></span></div>
+        <div class="srowB">Burn if I stop <span class="pill"></span></div>
+        <div class="srowB">Sound <span class="pill on"></span></div>
+        <div class="srowB">Haptics <span class="pill on"></span></div>
+        <div class="srowB">Word count <span class="pill on"></span></div>
+      </div>
+      <div class="stageB stage">
+        <button class="opener gearB" data-openB>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 8h16M4 13h16M4 18h11"/></svg>
+        </button>
+        <div class="feed"><div class="q">Between the two stands</div><div class="q">Resistance<span class="period">.</span></div></div>
+        <div class="footmark">type<span class="dot">.</span></div>
+      </div>
+    </div>
+
+    <!-- reader (shared) -->
+    <div class="reader" id="reader">
+      <div class="rbar"><button id="close">‹ back</button><span></span>
+        <span><button>share</button><button class="burn">burn</button></span></div>
+      <div class="rstamp" id="rstamp"></div>
+      <div class="rbody" id="rbody"></div>
+    </div>
+  </div>
+
+<script>
+  const NOTES=[
+    {date:"14 JUN 2026",words:84,snip:"The unlived life within us is the one Resistance guards.",
+      body:["The unlived life within us is the","one Resistance guards. Every morning","it is the same negotiation.","","Today I sat down."]},
+    {date:"12 JUN 2026",words:212,snip:"Targeting in the second campaign was off — Gregory on Next…",
+      body:["Targeting in the second campaign","was off. Gregory flagged it on the","Next call. Split them, re-run Thursday."]},
+    {date:"09 JUN 2026",words:139,snip:"Morning pages — three things before the noise starts.",
+      body:["Morning pages. Three things before","the noise starts and the day decides","for me what it's about."]},
+    {date:"03 JUN 2026",words:56,snip:"A short one. Keep it or it's gone.",body:["A short one.","Keep it or it's gone."]},
+    {date:"28 MAY 2026",words:301,snip:"The whole point is you can't go back and fix the line.",
+      body:["The whole point is you can't go back","and fix the line. The constraint is","the feature, not the bug."]},
+  ];
+  const phone=document.getElementById('phone');
+  function openNote(n){
+    document.getElementById('rstamp').textContent=n.date+' · '+n.words+' words kept';
+    document.getElementById('rbody').innerHTML=n.body.map(l=>`<div>${l||'&nbsp;'}</div>`).join('');
+    phone.classList.add('reading');
+  }
+  document.querySelectorAll('[data-list]').forEach(list=>{
+    NOTES.forEach(n=>{const b=document.createElement('button');b.className='note';
+      b.innerHTML=`<div class="d">${n.date}</div><div class="s">${n.snip}</div>`;
+      b.onclick=()=>openNote(n); list.appendChild(b);});
+  });
+
+  // mode A: drawer
+  document.querySelector('[data-openA]').onclick=(e)=>{e.stopPropagation();phone.classList.toggle('openA');};
+  document.querySelector('.stageA').addEventListener('click',(e)=>{
+    if(phone.classList.contains('openA') && !e.target.closest('[data-openA]')) phone.classList.remove('openA');
+  });
+  // mode B: rails
+  let s=0; const setB=v=>{s=v;phone.dataset.b=v;};
+  document.querySelector('[data-openB]').onclick=(e)=>{e.stopPropagation();setB(Math.min(2,s+1));};
+  document.querySelector('.stageB').addEventListener('click',(e)=>{
+    if(s>0 && !e.target.closest('[data-openB]')) setB(s-1);
+  });
+
+  document.getElementById('close').onclick=()=>phone.classList.remove('reading');
+
+  // toggle
+  const hint=document.getElementById('hint');
+  const reset=()=>{phone.classList.remove('openA','reading');setB(0);};
+  document.getElementById('btnA').onclick=function(){
+    reset();phone.classList.add('isA');phone.classList.remove('isB');
+    this.classList.add('on');document.getElementById('btnB').classList.remove('on');
+    hint.innerHTML='Tap the <span class="a">gear</span> (top-right) to open. Tap a kept page to read it.';
+  };
+  document.getElementById('btnB').onclick=function(){
+    reset();phone.classList.add('isB');phone.classList.remove('isA');
+    this.classList.add('on');document.getElementById('btnA').classList.remove('on');
+    hint.innerHTML='Tap <span class="a">≡</span> (top-left) twice to peel back both rails. Tap the paper sliver to step back. Tap a page to read it.';
+  };
+</script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>type — kept (single drawer)</title>
+<style>
+  :root{
+    --paper:#141519; --ink:#e7e8ea; --ink-soft:#c4c6cb; --ink-quiet:#888b92;
+    --ink-faint:#3f424a; --accent:#df5a26; --rule:#23252b;
+    --mono:"Courier Prime","Courier New",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:#0a0b0d; color:var(--ink); font-family:var(--mono);
+    display:flex; flex-direction:column; align-items:center; gap:18px;
+    padding:34px 16px 48px; min-height:100%;
+  }
+  .cap{font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#6c6f76; text-align:center}
+  .cap b{color:#aeb1b8; font-weight:700}
+  .cap .a{color:var(--accent)}
+
+  /* phone shell */
+  .phone{
+    position:relative; width:380px; height:780px; border-radius:46px;
+    background:var(--paper); overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 0 11px #1c1d22, 0 0 0 13px #2a2c32;
+  }
+  .status{
+    position:absolute; top:0; left:0; right:0; height:52px; z-index:60;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 30px 0; font-size:14px; color:var(--ink-soft); pointer-events:none;
+  }
+  .status .r{display:flex; gap:7px; align-items:center; font-size:12px}
+
+  /* ---- drawer (sits behind the paper) ---- */
+  .drawer{
+    position:absolute; inset:0; padding:64px 0 26px; display:flex; flex-direction:column;
+    background:#101115;
+  }
+  .dhead{padding:6px 26px 20px}
+  .wordmark{font-size:30px; font-weight:700; letter-spacing:-.01em}
+  .wordmark .dot{color:var(--accent)}
+  .who{font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:var(--ink-quiet); margin-top:6px}
+
+  .row{
+    display:flex; align-items:center; gap:14px; padding:13px 26px;
+    color:var(--ink-soft); font-size:17px; cursor:pointer; border:0; background:none;
+    width:100%; text-align:left; font-family:inherit;
+  }
+  .row svg{width:18px;height:18px;opacity:.7;flex:none}
+  .row:hover{color:var(--ink)}
+  .sectlabel{
+    padding:22px 26px 8px; font-size:10px; letter-spacing:.3em; text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .kept{overflow-y:auto; flex:1; padding-bottom:8px}
+  .note{
+    display:block; width:100%; text-align:left; border:0; background:none; cursor:pointer;
+    font-family:inherit; padding:12px 26px; border-top:1px solid var(--rule);
+  }
+  .note:first-child{border-top:0}
+  .note .d{font-size:11px; letter-spacing:.16em; color:var(--ink-faint); text-transform:uppercase}
+  .note .s{font-size:15px; color:var(--ink-soft); margin-top:5px; line-height:1.5;
+    display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden}
+  .note .w{font-size:11px; color:var(--ink-faint); margin-top:6px; letter-spacing:.1em}
+  .note:hover .s{color:var(--ink)}
+
+  /* ---- the paper (top layer, slides right to reveal drawer) ---- */
+  .stage{
+    position:absolute; inset:0; background:var(--paper); z-index:30;
+    transition:transform .42s cubic-bezier(.22,.61,.36,1), border-radius .42s;
+    will-change:transform;
+    box-shadow:-22px 0 60px rgba(0,0,0,.5);
+  }
+  .feed{
+    position:absolute; left:34px; right:34px; top:50%; transform:translateY(-58%);
+    font-size:18px; line-height:2.05; color:var(--ink);
+  }
+  .feed .q{color:var(--ink-soft)}
+  .gear{
+    position:absolute; top:54px; right:26px; z-index:40; border:0; background:none;
+    color:var(--ink-quiet); cursor:pointer; padding:6px;
+  }
+  .gear:hover{color:var(--ink)}
+  .footmark{
+    position:absolute; bottom:30px; left:0; right:0; text-align:center; z-index:40;
+    font-size:17px; font-weight:700; color:var(--ink-soft); opacity:.85;
+  }
+  .footmark .dot{color:var(--accent)}
+
+  .phone.open .stage{ transform:translateX(80%) scale(.97); border-radius:30px; }
+  .phone.open .stage::after{ content:""; position:absolute; inset:0; background:rgba(10,11,13,.18); }
+
+  /* ---- reader (read-only kept page, slides up over everything) ---- */
+  .reader{
+    position:absolute; inset:0; z-index:80; background:var(--paper);
+    transform:translateY(101%); transition:transform .42s cubic-bezier(.22,.61,.36,1);
+    display:flex; flex-direction:column;
+  }
+  .phone.reading .reader{ transform:translateY(0); }
+  .rbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:60px 24px 12px; color:var(--ink-quiet);
+  }
+  .rbar button{border:0;background:none;color:inherit;cursor:pointer;font-family:inherit;font-size:13px;
+    letter-spacing:.16em; text-transform:uppercase; padding:6px}
+  .rbar button:hover{color:var(--ink)}
+  .rbar .burn:hover{color:var(--accent)}
+  .rstamp{padding:8px 34px 0; font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-faint)}
+  .rbody{padding:14px 34px 40px; font-size:18px; line-height:2.05; color:var(--ink); overflow-y:auto}
+  .rbody .period,.feed .period{color:var(--accent)}
+</style>
+</head>
+<body>
+  <div class="cap">MOCKUP A · <b>single drawer</b> — gear opens one panel: settings + your kept pages. tap a page to <span class="a">read</span> it.</div>
+
+  <div class="phone" id="phone">
+    <div class="status"><span>5:32</span><span class="r">●●● &nbsp; 🔋</span></div>
+
+    <!-- drawer underneath -->
+    <div class="drawer">
+      <div class="dhead">
+        <div class="wordmark">type<span class="dot">.</span></div>
+        <div class="who">Kelly Vohs</div>
+      </div>
+      <button class="row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
+
+      <div class="sectlabel">Kept · iCloud Drive → type</div>
+      <div class="kept" id="kept"></div>
+    </div>
+
+    <!-- paper on top -->
+    <div class="stage" id="stage">
+      <button class="gear" id="gear" title="open">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+      </button>
+      <div class="feed">
+        <div class="q">Most of us have two lives:</div>
+        <div class="q">the life we live, and the</div>
+        <div class="q">unlived life within us<span class="period">.</span></div>
+      </div>
+      <div class="footmark">type<span class="dot">.</span></div>
+    </div>
+
+    <!-- reader -->
+    <div class="reader" id="reader">
+      <div class="rbar">
+        <button id="close">‹ back</button>
+        <span></span>
+        <span><button>share</button><button class="burn">burn</button></span>
+      </div>
+      <div class="rstamp" id="rstamp"></div>
+      <div class="rbody" id="rbody"></div>
+    </div>
+  </div>
+
+<script>
+  const NOTES = [
+    { date:"14 JUN 2026", words:84, snip:"The unlived life within us is the one Resistance guards.",
+      body:["The unlived life within us is the","one Resistance guards. Every morning","it is the same negotiation — sit down,","or invent a reason not to.","","Today I sat down."] },
+    { date:"12 JUN 2026", words:212, snip:"Targeting in the second campaign was off — Gregory on Next…",
+      body:["Targeting in the second campaign","was off. Gregory flagged it on the","Next call: the audience overlapped","the first set by almost half.","","Split them. Re-run Thursday."] },
+    { date:"09 JUN 2026", words:139, snip:"Morning pages — three things before the noise starts.",
+      body:["Morning pages. Three things before","the noise starts and the day decides","for me what it is going to be about."] },
+    { date:"03 JUN 2026", words:56, snip:"A short one. Keep it or it's gone.",
+      body:["A short one.","Keep it or it's gone."] },
+    { date:"28 MAY 2026", words:301, snip:"The whole point is you can't go back and fix the line.",
+      body:["The whole point is you can't go back","and fix the line. You commit it the","moment you move on. That constraint","is the feature, not the bug."] },
+  ];
+
+  const kept = document.getElementById('kept');
+  const phone = document.getElementById('phone');
+  const reader = document.getElementById('reader');
+  NOTES.forEach(n=>{
+    const b=document.createElement('button'); b.className='note';
+    b.innerHTML=`<div class="d">${n.date}</div><div class="s">${n.snip}</div><div class="w">${n.words} words</div>`;
+    b.onclick=()=>open(n);
+    kept.appendChild(b);
+  });
+  function open(n){
+    document.getElementById('rstamp').textContent = n.date + ' · ' + n.words + ' words kept';
+    document.getElementById('rbody').innerHTML = n.body.map(l=>`<div>${l||'&nbsp;'}</div>`).join('');
+    phone.classList.add('reading');
+  }
+  document.getElementById('gear').onclick=()=>phone.classList.toggle('open');
+  document.getElementById('stage').onclick=(e)=>{ if(phone.classList.contains('open') && e.target.id!=='gear') phone.classList.remove('open'); };
+  document.getElementById('close').onclick=()=>phone.classList.remove('reading');
+</script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>type — kept (bottom platen)</title>
+<style>
+  .phone[data-theme="dispatch"]{--paper:#e7dcc1;--ink:#2a2418;--ink-soft:#463d2a;--ink-quiet:#7a6e52;--ink-faint:#ad9f7c;--accent:#9c3a2a}
+  .phone[data-theme="light"]{--paper:#f6f2e9;--ink:#1c1a16;--ink-soft:#3a362e;--ink-quiet:#7c766a;--ink-faint:#c2bbab;--accent:#c0461f}
+  .phone[data-theme="dark"]{--paper:#15140f;--ink:#e6e0d2;--ink-soft:#c4bdac;--ink-quiet:#8a8474;--ink-faint:#3f3b30;--accent:#cf6234}
+
+  :root{--mono:"Courier Prime","Courier New",ui-monospace,monospace;--steel:#3d382f;--steel2:#211d16;--rubber:#1b1915;--rubber2:#2b2823}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:#0c0b09;color:#857f6f;font-family:var(--mono);
+    display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px 16px 46px;min-height:100%}
+
+  .bars{display:flex;gap:20px;flex-wrap:wrap;justify-content:center}
+  .group{display:flex;align-items:center;gap:9px}
+  .group .lbl{font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:#5b554a}
+  .toggle{display:flex;background:#171511;border:1px solid #2a261f;border-radius:11px;padding:4px;gap:3px}
+  .toggle button{border:0;background:none;color:#857f6f;font-family:inherit;cursor:pointer;font-size:11px;
+    letter-spacing:.13em;text-transform:uppercase;padding:8px 12px;border-radius:7px}
+  .toggle button.on{background:#9c3a2a;color:#f0e7d4;font-weight:700}
+  .cap{font-size:12px;letter-spacing:.05em;color:#6b6555;text-align:center;max-width:540px;line-height:1.65}
+  .cap b{color:#b8b09c}
+
+  .phone{position:relative;width:384px;height:806px;border-radius:50px;overflow:hidden;background:var(--paper);
+    box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 12px #14120e,0 0 0 13px #2a2620;touch-action:none;user-select:none}
+  .status{position:absolute;top:0;left:0;right:0;height:50px;z-index:90;display:flex;align-items:center;
+    justify-content:space-between;padding:18px 32px 0;font-size:13px;color:var(--ink-quiet);pointer-events:none;font-variant-numeric:tabular-nums}
+
+  /* ---------- writing screen ---------- */
+  .stage{position:absolute;inset:0;background:var(--paper);z-index:40;transition:transform .5s cubic-bezier(.3,.72,.3,1)}
+  .feed{position:absolute;left:38px;right:38px;top:50%;transform:translateY(-60%);font-size:18px;line-height:2.1;color:var(--ink)}
+  .feed .q{color:var(--ink-soft)} .feed .period{color:var(--accent)}
+  .caret{display:inline-block;width:9px;height:1.05em;background:var(--ink);vertical-align:-2px;margin-left:2px;animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .wordmark{position:absolute;bottom:48px;left:0;right:0;text-align:center;z-index:42;font-size:24px;font-weight:700;
+    color:var(--ink-soft);cursor:pointer;transition:transform .12s,color .2s}
+  .wordmark .dot{color:var(--accent)} .wordmark:active{transform:scale(.96)}
+  .wmhint{position:absolute;bottom:30px;left:0;right:0;text-align:center;z-index:42;font-size:9.5px;letter-spacing:.26em;
+    text-transform:uppercase;color:var(--ink-faint);opacity:0;transition:opacity .25s}
+  .stage.holding .wmhint{opacity:1} .stage.holding .wordmark{color:var(--accent)}
+  .phone.reviewing .stage{transform:translateY(-103%)}
+
+  /* ---------- kept screen ---------- */
+  .kept{position:absolute;inset:0;z-index:30;background:var(--paper);display:flex;flex-direction:column}
+  .ktop{display:flex;align-items:center;justify-content:space-between;padding:58px 26px 0;color:var(--ink-quiet);z-index:25}
+  .ktop button{border:0;background:none;color:var(--ink-quiet);font-family:inherit;cursor:pointer;font-size:12px;
+    letter-spacing:.16em;text-transform:uppercase;padding:6px} .ktop button:hover{color:var(--ink)}
+
+  /* the reading area — a note unrolls here when you tap it */
+  .reader{flex:1;position:relative;overflow:hidden}
+  .read{position:absolute;inset:0;padding:26px 40px;display:flex;flex-direction:column;justify-content:center;
+    transform-origin:bottom center;opacity:0;transform:scaleY(.25) translateY(40px)}
+  .kept.open .read{opacity:1;transform:scaleY(1) translateY(0);transition:transform .5s cubic-bezier(.25,.8,.3,1),opacity .4s}
+  .rdate{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-quiet);
+    border-bottom:1.5px solid var(--ink);padding-bottom:9px;margin-bottom:18px;display:flex;justify-content:space-between}
+  .rbody{font-size:18px;line-height:2.1;color:var(--ink)} .rbody .period{color:var(--accent)}
+  .emptyhint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;
+    color:var(--ink-faint);font-size:13px;letter-spacing:.12em;padding:0 50px;line-height:1.9}
+  .kept.open .emptyhint{opacity:0}
+
+  /* ---------- the platen at the bottom ---------- */
+  .platen{position:relative;flex:none;height:150px;z-index:20}
+  .bar{position:absolute;left:0;right:0;top:18px;height:40px;
+    background:linear-gradient(180deg,var(--rubber2),var(--rubber) 50%,#0e0d0b);
+    box-shadow:inset 0 2px 4px rgba(255,255,255,.05),inset 0 -7px 12px rgba(0,0,0,.6),0 5px 14px rgba(0,0,0,.45);
+    border-top:1px solid #423c32}
+  .bar::after{content:"";position:absolute;inset:0;opacity:.35;background:repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 1px,transparent 1px 4px)}
+  /* the ridged knob, handed end */
+  .knob{position:absolute;top:6px;width:64px;height:64px;border-radius:50%;z-index:24;
+    background:radial-gradient(circle at 36% 32%,var(--steel),var(--steel2) 70%,#0e0d0b);
+    box-shadow:inset 0 2px 2px rgba(255,255,255,.14),0 6px 14px rgba(0,0,0,.6);cursor:grab}
+  .knob:active{cursor:grabbing}
+  .knob .ridge{position:absolute;inset:7px;border-radius:50%;background:repeating-conic-gradient(#4a443a 0 7.5deg,#201c15 7.5deg 15deg)}
+  .knob .cap{position:absolute;top:50%;left:50%;width:16px;height:16px;border-radius:50%;transform:translate(-50%,-50%);
+    background:radial-gradient(circle at 40% 35%,#56503f,#1f1b14)}
+  .phone[data-hand="right"] .knob{right:-16px} .phone[data-hand="left"] .knob{left:-16px}
+
+  /* the scrolling deck of note slips, riding the platen */
+  .deckwin{position:absolute;left:0;right:0;top:64px;bottom:0;overflow:hidden}
+  .phone[data-hand="right"] .deckwin{right:54px} .phone[data-hand="left"] .deckwin{left:54px}
+  .deck{position:absolute;top:0;bottom:0;left:0;display:flex;align-items:center;gap:12px;padding:0 22px;will-change:transform}
+  .slip{flex:none;width:124px;height:74px;background:var(--paper);border:1px solid var(--ink-faint);border-radius:2px;
+    padding:9px 11px;cursor:pointer;box-shadow:0 3px 7px rgba(0,0,0,.18);transition:transform .18s,box-shadow .18s;position:relative}
+  .slip:hover{transform:translateY(-4px);box-shadow:0 8px 16px rgba(0,0,0,.26)}
+  .slip.active{border-color:var(--accent);box-shadow:0 8px 16px rgba(0,0,0,.3)}
+  .slip .sd{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-quiet);margin-bottom:5px}
+  .slip .ss{font-size:11px;line-height:1.5;color:var(--ink-soft);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .slip .pin{position:absolute;top:-3px;right:9px;width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.0}
+  .slip.active .pin{opacity:.85}
+</style>
+</head>
+<body>
+  <div class="bars">
+    <div class="group"><span class="lbl">Hand</span>
+      <div class="toggle" id="hand"><button data-h="left">Left</button><button data-h="right" class="on">Right</button></div></div>
+    <div class="group"><span class="lbl">Paper</span>
+      <div class="toggle" id="theme"><button data-t="dispatch" class="on">Dispatch</button><button data-t="light">Light</button><button data-t="dark">Dark</button></div></div>
+  </div>
+  <div class="cap"><b>Hold</b> “type.” to roll up the platen · <b>spin</b> the knob (or drag the slips) to scroll your kept notes · <b>tap a slip</b> and it opens up.</div>
+
+  <div class="phone" id="phone" data-theme="dispatch" data-hand="right">
+    <div class="status"><span>5:32</span><span>100%</span></div>
+
+    <!-- kept screen (behind) -->
+    <div class="kept" id="kept">
+      <div class="ktop"><button id="back">‹ write</button><span class="count" id="count"></span></div>
+      <div class="reader">
+        <div class="emptyhint">spin the platen below.<br>tap a note to open it.</div>
+        <div class="read"><div class="rdate" id="rdate"></div><div class="rbody" id="rbody"></div></div>
+      </div>
+      <div class="platen">
+        <div class="bar"></div>
+        <div class="deckwin"><div class="deck" id="deck"></div></div>
+        <div class="knob" id="knob"><div class="ridge" id="ridge"></div><div class="cap"></div></div>
+      </div>
+    </div>
+
+    <!-- writing screen -->
+    <div class="stage" id="stage">
+      <div class="feed"><div class="q">Most of us have two lives:</div><div class="q">the life we live, and the</div><div class="q">unlived life within us<span class="period">.</span><span class="caret"></span></div></div>
+      <button class="wordmark" id="wordmark">type<span class="dot">.</span></button>
+      <div class="wmhint">keep holding — rolling up</div>
+    </div>
+  </div>
+
+<script>
+  const NOTES=[
+    {date:"14 JUN 2026",words:84,snip:"The unlived life within us is the one Resistance guards.",
+      body:["The unlived life within us is","the one Resistance guards.","Every morning the same","negotiation — sit down, or","invent a reason not to.","","Today I sat down."]},
+    {date:"12 JUN 2026",words:212,snip:"Targeting in the second campaign was off — Gregory on Next.",
+      body:["Targeting in the second","campaign was off. Gregory","flagged it on the Next call:","the audience overlapped the","first set by almost half."]},
+    {date:"09 JUN 2026",words:139,snip:"Morning pages — three things before the noise starts.",
+      body:["Morning pages. Three things","before the noise starts and","the day decides for me what","it is going to be about."]},
+    {date:"03 JUN 2026",words:56,snip:"A short one. Keep it or it's gone.",body:["A short one.","Keep it or it's gone."]},
+    {date:"28 MAY 2026",words:301,snip:"The whole point is you can't go back and fix the line.",
+      body:["The whole point is you can't","go back and fix the line.","You commit it the moment","you move on.","","The constraint is the feature."]},
+    {date:"21 MAY 2026",words:97,snip:"Notes from the walk. The idea arrived between blocks.",
+      body:["Notes from the walk. The idea","arrived between the third and","fourth block, the way they","always do once I stop reaching."]},
+    {date:"09 MAY 2026",words:64,snip:"Test it on the phone first. It reads differently in the hand.",
+      body:["Test it on the phone first.","Everything reads differently","once it's in the hand."]},
+  ];
+
+  const phone=document.getElementById('phone');
+  const kept=document.getElementById('kept');
+  const deck=document.getElementById('deck');
+  const win=deck.parentElement;
+  const knob=document.getElementById('knob');
+  const ridge=document.getElementById('ridge');
+  let offset=0,minOff=0,maxOff=0,raf=0,activeIdx=-1;
+
+  NOTES.forEach((n,i)=>{const s=document.createElement('div');s.className='slip';
+    s.innerHTML=`<div class="pin"></div><div class="sd">${n.date}</div><div class="ss">${n.snip}</div>`;
+    s._tap=()=>openNote(i,s); deck.appendChild(s);});
+  document.getElementById('count').textContent=NOTES.length+' kept';
+
+  function measure(){const total=deck.scrollWidth, vis=win.clientWidth;
+    maxOff=0; minOff=Math.min(0, vis-total);}
+  function render(){offset=Math.max(minOff,Math.min(maxOff,offset));
+    deck.style.transform=`translateX(${offset}px)`;
+    ridge.style.transform=`rotate(${(-offset/2.2)}deg)`;}   // knob turns with the scroll
+
+  function openNote(i,el){
+    if(activeIdx>=0) deck.children[activeIdx].classList.remove('active');
+    activeIdx=i; el.classList.add('active');
+    document.getElementById('rdate').innerHTML=`<span>${NOTES[i].date}</span><span>${NOTES[i].words} words</span>`;
+    document.getElementById('rbody').innerHTML=NOTES[i].body.map(l=>`<div>${l||'&nbsp;'}</div>`).join('');
+    kept.classList.remove('open'); void kept.offsetWidth; kept.classList.add('open');
+  }
+
+  // drag / fling — lovely inertia
+  let drag=null;
+  function down(e){cancelAnimationFrame(raf);drag={x:e.clientX,o:offset,lx:e.clientX,lt:e.timeStamp,v:0,moved:0,el:e.target.closest('.slip')};
+    try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}}
+  function move(e){if(!drag)return;const dx=e.clientX-drag.x;drag.moved=Math.max(drag.moved,Math.abs(dx));
+    offset=drag.o+dx;const dt=e.timeStamp-drag.lt;if(dt>0)drag.v=(e.clientX-drag.lx)/dt;drag.lx=e.clientX;drag.lt=e.timeStamp;render();}
+  function up(){if(!drag)return;const d=drag;drag=null;
+    if(d.moved<6){ if(d.el&&d.el._tap)d.el._tap(); return; }     // a tap, not a scroll
+    momentum(d.v);}
+  function momentum(v){let last=null;
+    function step(t){if(last===null)last=t;const dt=Math.min(40,t-last);last=t;
+      offset+=v*dt; v*=Math.pow(0.93,dt/16);
+      if(offset>maxOff){offset=maxOff;v=0;} if(offset<minOff){offset=minOff;v=0;}
+      render(); if(Math.abs(v)>0.02) raf=requestAnimationFrame(step);}
+    raf=requestAnimationFrame(step);}
+  [win,knob].forEach(el=>{el.addEventListener('pointerdown',down);el.addEventListener('pointermove',move);
+    el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);});
+  win.addEventListener('wheel',e=>{e.preventDefault();cancelAnimationFrame(raf);
+    offset-=(Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY);render();},{passive:false});
+
+  // writing screen: tap = write, hold = platen
+  const stage=document.getElementById('stage');
+  let holdT=null,held=false;
+  const wm=document.getElementById('wordmark');
+  wm.addEventListener('pointerdown',()=>{held=false;stage.classList.add('holding');
+    holdT=setTimeout(()=>{held=true;stage.classList.remove('holding');openKept();},460);});
+  function relWm(){clearTimeout(holdT);stage.classList.remove('holding');
+    if(!held){const c=document.querySelector('.caret');if(c){c.style.background='var(--accent)';setTimeout(()=>c.style.background='',180);}}}
+  wm.addEventListener('pointerup',relWm); wm.addEventListener('pointerleave',()=>{clearTimeout(holdT);stage.classList.remove('holding');});
+
+  function openKept(){phone.classList.add('reviewing');requestAnimationFrame(()=>{measure();render();});}
+  document.getElementById('back').onclick=()=>{phone.classList.remove('reviewing');kept.classList.remove('open');
+    if(activeIdx>=0){deck.children[activeIdx].classList.remove('active');activeIdx=-1;}};
+
+  document.getElementById('hand').onclick=e=>{const b=e.target.closest('button');if(!b)return;phone.dataset.hand=b.dataset.h;
+    [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+    if(phone.classList.contains('reviewing'))requestAnimationFrame(()=>{measure();render();});};
+  document.getElementById('theme').onclick=e=>{const b=e.target.closest('button');if(!b)return;phone.dataset.theme=b.dataset.t;
+    [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));};
+
+  measure();render();
+  window.addEventListener('resize',()=>{if(phone.classList.contains('reviewing')){measure();render();}});
+</script>
+</body>
+</html>

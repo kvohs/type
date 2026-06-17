@@ -55,11 +55,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<!-- Opt out of iOS 26 Liquid Glass: use the legacy (pre-26) design system,
-	     including the old keyboard — which has no rounded-corner grey backdrop.
-	     type is ~all web UI, so only the keyboard / status bar / share sheet are
-	     affected. Temporary escape hatch (Apple may remove it in a future iOS). -->
-	<key>UIDesignRequiresCompatibility</key>
-	<true/>
 </dict>
 </plist>

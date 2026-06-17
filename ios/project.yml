@@ -8,8 +8,8 @@ settings:
   base:
     DEVELOPMENT_TEAM: CAKM5U4VR2
     SWIFT_VERSION: "5.9"
-    MARKETING_VERSION: 1.8.0
-    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.9.0
+    CURRENT_PROJECT_VERSION: 4
 targets:
   type:
     type: application

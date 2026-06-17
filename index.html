@@ -182,7 +182,7 @@
      fighting iOS. plain monospace text at the airy --space rhythm; the platen above
      stands down while it's active. */
   .edit-surface {
-    position: absolute; top: 0; bottom: 104px;   /* END above the docked KEEP·BURN bar (~63px) so the active line / caret can never scroll behind it — the textarea simply doesn't extend down there */
+    position: absolute; top: 0; bottom: 0;   /* full height — overlay, not avoidance; content flows behind the keyboard */
     left: 50%; transform: translateX(-50%);
     width: min(64ch, 84vw);                  /* the same measure as .feed */
     box-sizing: border-box;
@@ -666,7 +666,9 @@
      visual viewport, so the strike point centers in the area the keyboard
      leaves visible — the page never hides under the keys */
   body.ios { overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
-  body.ios .stage { top: var(--vvt, 0px); height: var(--vvh, 100%); }
+  /* OVERLAY, not avoidance: the stage stays full screen height and flows behind
+     the keyboard. We do NOT shrink it to the visible area (that was the seam). */
+  body.ios .stage { top: 0; height: 100%; }
   body.ios .hint .k { display: none; }              /* no ⌘ glyphs on glass */
   body.ios .hint .l { font-size: 12.5px; letter-spacing: .26em; }
   /* keep and burn at opposite edges of the bottom — distance, not chrome.
@@ -703,29 +705,50 @@
     padding: 10px 26px; -webkit-tap-highlight-color: transparent; transition: opacity .3s ease; }
   body.ios .kept-pull .pull-bar { width: 40px; height: 5px; border-radius: 3px; background: var(--ink-faint); opacity: .7; transition: opacity .15s ease; }
   body.ios .kept-pull:active .pull-bar { opacity: 1; }
-  /* while typing, the same KEEP · ▬ · BURN bar docks just above the keyboard
-     (iOS's own ‹ ∨ ✓ bar is suppressed natively). kept = tap ▬ or swipe up;
-     dismiss the keyboard = swipe down on the paper. */
+  /* KEEP · share · BURN as quiet text docked just above the keyboard — no slab, no
+     gesture, it's simply there. It fades while you actively type and returns the
+     moment you pause (body.typing, same as type's corner glyphs), so the page stays
+     clean as the words flow but the actions are right there when you rest. */
   body.ios.kb-up .hints {
     top: auto;
-    bottom: calc(100vh - (var(--vvt, 0px) + var(--vvh, 100vh)));   /* flush on the keyboard */
-    padding: 34px 13vw 14px;                                       /* feather room above; keep KEEP·BURN inset off the edges (matches steady state) */
-    /* solid paper base so the writing line doesn't bleed through KEEP · ▬ · BURN,
-       feathered at the top so text scrolling under it fades out gently */
-    background: linear-gradient(to top, var(--paper) 0%, var(--paper) 56%, transparent 100%);
-    pointer-events: none;                                          /* the feather never eats a tap */
+    left: 0; right: 0;
+    bottom: calc(100vh - (var(--vvt, 0px) + var(--vvh, 100vh)) + 12px);   /* just above the keys */
+    padding: 0 13vw;
+    background: none;
+    opacity: 1;
+    transition: opacity .35s ease;
+    pointer-events: none;
   }
-  body.ios.kb-up .hints > * { pointer-events: auto; }              /* but the buttons still catch theirs */
-  body.ios.kb-up .kept-pull { opacity: 1; }
-  /* the bar stays put while typing — it's quiet enough; don't fade it out */
-  body.ios.kb-up .hints.dim { opacity: 1; }   /* stays visible while typing; taps handled per-button above */
+  body.ios.kb-up .hints > * { pointer-events: auto; }
+  body.ios.kb-up.typing .hints { opacity: 0; }   /* clean while the words flow; returns on pause */
+  /* the ▬ kept-bar sits centered between KEEP and BURN while writing — pull up on it
+     for kept, pull down to dismiss the keyboard. */
+  /* keyboard DOWN (idle): KEEP · BURN are not stuck to the bottom — only the kept
+     drag-up bar shows there, centered. KEEP/BURN live above the keyboard while writing. */
+  body.ios:not(.kb-up) #hintKeep,
+  body.ios:not(.kb-up) #hintBurn { display: none; }
+  body.ios:not(.kb-up) .hints-group { justify-content: center; }
   /* keyboard up: drop the strike point low so the opener quote and your
      committed lines keep the room above. Centering wasted the bottom half of
      the visible area and shoved longer quotes off the top edge; writing nearer
      the keyboard lets the page fill upward and stay readable. The transition
      softens the shift when the keyboard appears. */
   body.ios .feed { transition: top .28s cubic-bezier(.22,.61,.25,1); }
-  body.ios.kb-up .feed { top: calc(76% - 1.02em); }
+  /* the stage is now full height, so the strike point is measured against the
+     area ABOVE the keyboard (vvt + 76% of vvh) — keeps the live line just above
+     the keys while committed lines roll up and the rest of the sheet flows under. */
+  body.ios.kb-up .feed { top: calc(var(--vvt, 0px) + var(--vvh, 100vh) * 0.76 - 1.02em); }
+  /* editable mode: the textarea is full height (overlay), so the caret would grow
+     down behind the keyboard. Give it bottom scroll-room = keyboard height + the
+     pill, so the native caret-scroll keeps the caret above the keys and the text
+     scrolls up. This is scroll-room, not avoidance — the box stays full height. */
+  body.ios.kb-up .edit-surface {
+    padding-bottom: calc(100vh - (var(--vvt, 0px) + var(--vvh, 100vh)) + 170px);
+    scroll-padding-bottom: calc(100vh - (var(--vvt, 0px) + var(--vvh, 100vh)) + 170px);
+  }
+  /* it's a sheet, not a scroll view — no scroll indicator on a long page */
+  .edit-surface { scrollbar-width: none; }
+  .edit-surface::-webkit-scrollbar { width: 0; height: 0; display: none; }
   body.ios #hintBurn .l { color: color-mix(in srgb, var(--ember) 60%, var(--ink-faint)); }
   /* iOS: settings is a full-height rail that sits UNDER the paper on the right.
      Opening it slides the paper to the LEFT to expose the rail beneath — like
@@ -794,8 +817,8 @@
     right: 12px;
     width: 40px; height: 40px;
     display: inline-flex; align-items: center; justify-content: center;
-    color: var(--ink-quiet);          /* faint was invisible on dark paper */
-    opacity: .9;
+    color: var(--ink-faint);          /* match the KEEP button */
+    opacity: 1;
     -webkit-tap-highlight-color: transparent;
   }
   body.ios .hint.ios-settings:active { color: var(--ink); }
@@ -805,14 +828,14 @@
     top: 14px; right: 16px;                 /* desktop: top-right (free corner; traffic lights are top-left) */
     width: 40px; height: 40px;
     display: inline-flex; align-items: center; justify-content: center;
-    color: var(--ink-quiet); opacity: 0; pointer-events: none; cursor: pointer;
+    color: var(--ink-faint); opacity: 0; pointer-events: none; cursor: pointer;   /* match the KEEP button */
     transition: opacity .35s ease; -webkit-tap-highlight-color: transparent;
     -webkit-app-region: no-drag;            /* stays clickable over the desktop drag region */
   }
   body.ios .prose-share {                   /* iOS: top-left (settings hamburger is top-right) */
     top: calc(8px + env(safe-area-inset-top, 0px)); left: 12px; right: auto;
   }
-  body.has-prose .prose-share { opacity: .9; pointer-events: auto; }
+  body.has-prose .prose-share { opacity: 1; pointer-events: auto; }
   .prose-share:hover, .prose-share:active { color: var(--ink); }
   body.reviewing .prose-share, body.feedback .prose-share { opacity: 0 !important; pointer-events: none; }
   /* clean screen while typing — the corner glyphs (share / settings) fade out and
@@ -1014,7 +1037,7 @@
     <!-- editable mode: a real native text box. native caret / selection / copy-paste /
          scrolling, so it stops fighting iOS. holds the whole note as plain text; the
          platen above is hidden while it's active. -->
-    <textarea class="edit-surface" id="editSurface" hidden autocorrect="on" autocapitalize="sentences" autocomplete="off" spellcheck="false"></textarea>
+    <textarea class="edit-surface" id="editSurface" hidden autocorrect="off" autocapitalize="sentences" autocomplete="off" spellcheck="false"></textarea>
     <div class="intro" id="intro"></div>
     <div class="stamp" id="stamp"><div class="date" id="stampDate"></div><div class="kept" id="stampKept"></div></div>
     <div class="smolder-veil" id="smolderVeil"></div>
@@ -1078,6 +1101,7 @@
       <label class="setrow setrow-sub"><span>Margin bell</span><input type="checkbox" id="setBell" /><span class="sw"></span></label>
     </div>
     <label class="setrow" id="rowHaptics" hidden><span>Haptics</span><input type="checkbox" id="setHaptics" /><span class="sw"></span></label>
+    <label class="setrow"><span>Autocorrect</span><input type="checkbox" id="setAutocorrect" /><span class="sw"></span></label>
     <div class="setdiv"></div>
     <div class="settings-title">quotes</div>
     <label class="setrow"><span>On startup</span><input type="checkbox" id="setQuoteOpen" /><span class="sw"></span></label>
@@ -1210,7 +1234,7 @@
   })();
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, haptics: true, quoteOpen: true, quoteBurn: true, saveDir: '', lineSpace: 1.5 };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, haptics: true, autocorrect: false, quoteOpen: true, quoteBurn: true, saveDir: '', lineSpace: 1.5 };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
@@ -1218,7 +1242,7 @@
   const applyTheme = () => {
     THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), editable: document.getElementById('setEditable'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), haptics: document.getElementById('setHaptics'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), editable: document.getElementById('setEditable'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), sound: document.getElementById('setSound'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), haptics: document.getElementById('setHaptics'), autocorrect: document.getElementById('setAutocorrect'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
@@ -1232,9 +1256,20 @@
       if (k === 'smolder') { if (settings.smolder) scheduleSmolder(); else coolSmolder(); updateBurnAfter(); }
       if (k === 'wordCount' || k === 'pages' || k === 'timer') updateMeter();
       if (k === 'sound') applySoundDetails();
+      if (k === 'autocorrect') applyAutocorrect();
       if (k === 'editable') { applyEditable(); syncEditableSurface(); positionEditCaret(); }
     });
   });
+  // Autocorrect & the predictive suggestion bar are one iOS feature (autocorrectionType):
+  // off = no bar (no emoji/word suggestions) AND no auto-fixing. Drives both writing surfaces.
+  function applyAutocorrect() {
+    const v = settings.autocorrect ? 'on' : 'off';
+    if (editSurface) editSurface.setAttribute('autocorrect', v);
+    if (activeEl) activeEl.setAttribute('autocorrect', v);
+    // the change only takes hold on the next focus; if a surface is focused now, re-arm it
+    const f = document.activeElement;
+    if (f === editSurface || (activeEl && f === activeEl)) { f.blur(); setTimeout(() => { try { f.focus(); } catch (e) {} }, 0); }
+  }
   // editable page is one flowing region, so its spacing must live in the line
   // box (no separate lines to gap between). body.editing flips the CSS to do that.
   const applyEditable = () => { document.body.classList.toggle('editing', !!settings.editable); };
@@ -1360,6 +1395,9 @@
   const soundDetails = document.getElementById('soundDetails');
   const applySoundDetails = () => { soundDetails.hidden = !settings.sound; };
   applySoundDetails();
+  // apply the autocorrect setting to the textarea at load (the live platen line
+  // doesn't exist yet — renderActive sets it from settings.autocorrect when built)
+  if (editSurface) editSurface.setAttribute('autocorrect', settings.autocorrect ? 'on' : 'off');
   const toggleSettings = () => {
     settingsEl.hidden = !settingsEl.hidden;
     if (!settingsEl.hidden) { hints.classList.remove('dim'); if (activeEl) activeEl.blur(); if (editSurface) editSurface.blur(); }
@@ -2258,7 +2296,7 @@
     activeEl.classList.add('line', 'active-line');
     if (!activeEl.dataset.bound) {
       activeEl.dataset.bound = '1';
-      activeEl.setAttribute('autocorrect', 'on');
+      activeEl.setAttribute('autocorrect', settings.autocorrect ? 'on' : 'off');   // off → no predictive bar (no emoji/word suggestions)
       activeEl.setAttribute('autocapitalize', 'sentences');
       // macOS (Electron) gates native autocorrect behind spellcheck, so turn it on
       // there; iOS gets autocorrect from the autocorrect attribute and stays clean
@@ -3401,13 +3439,20 @@
       mark.setAttribute('aria-label', 'kept pages');
       mark.innerHTML = '<span class="pull-bar"></span>';
       hn.insertBefore(mark, document.getElementById('hintBurn'));
-      mark.addEventListener('click', () => Kept.open());
-      // it's a drawer handle: tap OR pull up on the bar to open kept
+      // contextual handle: keyboard away → pull up brings it back; keyboard up →
+      // pull up lifts the kept sheets; pull down tucks the keyboard away.
+      const liftUp = () => {
+        if (document.body.classList.contains('kb-up')) Kept.open();
+        else if (editActive()) editSurface.focus(); else focusActiveEnd();   // keyboard away → bring it back on the right surface
+      };
+      mark.addEventListener('click', liftUp);
       let pullY = null;
       mark.addEventListener('touchstart', (e) => { pullY = e.touches[0].clientY; }, { passive: true });
       mark.addEventListener('touchmove', (e) => {
         if (pullY == null) return;
-        if (pullY - e.touches[0].clientY > 24) { pullY = null; Kept.open(); }   // a short upward pull lifts it
+        const d = pullY - e.touches[0].clientY;
+        if (d > 24) { pullY = null; liftUp(); }                                      // pull up → kept (or keyboard if it's away)
+        else if (d < -24) { pullY = null; if (activeEl) activeEl.blur(); if (editSurface) editSurface.blur(); }  // pull down → dismiss keyboard
       }, { passive: true });
       mark.addEventListener('touchend', () => { pullY = null; }, { passive: true });
       hintSettings.classList.add('ios-settings');
@@ -3427,9 +3472,18 @@
       document.documentElement.style.setProperty('--vvh', (vv ? vv.height : window.innerHeight) + 'px');
       document.documentElement.style.setProperty('--vvt', (vv ? vv.offsetTop : 0) + 'px');
       // keyboard up = visual viewport noticeably shorter than the layout one
-      document.body.classList.toggle('kb-up', !!vv && vv.height < window.innerHeight - 90);
+      const kbUp = !!vv && vv.height < window.innerHeight - 90;
+      document.body.classList.toggle('kb-up', kbUp);
+      if (!kbUp) document.body.classList.remove('actions-open');   // reset the gesture-revealed row when the keyboard drops
       if (window.scrollX || window.scrollY) window.scrollTo(0, 0);   // undo any keyboard-driven document scroll
       computeCols(); reflowLocked(); layout();
+      // keyboard came back on an editable sheet → roll the caret to the strike point
+      // instead of leaving it jammed at the bottom behind the bar. The bottom
+      // scroll-room puts the caret ~3 lines above the keys. (rAF so the padding,
+      // which depends on the --vvh we just set, is applied first.)
+      if (kbUp && editActive() && document.activeElement === editSurface) {
+        requestAnimationFrame(() => { editSurface.scrollTop = editSurface.scrollHeight; });
+      }
     };
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', syncViewport);
@@ -3441,6 +3495,11 @@
     // scroll — snap any stray scroll straight back to the top.
     window.addEventListener('scroll', () => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); }, { passive: true });
     syncViewport();
+
+    // Pull RIGHT on the page to reveal the actions (KEEP · BURN) above the keyboard;
+    // pull LEFT or tap the page to send them away. The sheet stays clean by default.
+    // KEEP · share · BURN are always present above the keyboard (quiet text that
+    // fades while typing) — no gesture toggle needed.
 
     // The live line is a real native contenteditable (built in renderActive).
     // iOS owns its text, caret, selection, autocorrect, predictive, dictation,
@@ -3505,17 +3564,25 @@
       if (sel && !sel.isCollapsed) { swipeStart = null; return; }
       const dy = e.touches[0].clientY - swipeStart.y;
       const dx = e.touches[0].clientX - swipeStart.x;
-      // left-to-right swipe anywhere: bring the page back over the settings rail if
-      // it's open, otherwise tuck the keyboard away. Horizontal so it works in
-      // editable too (the textarea owns vertical scroll there).
+      // left-to-right swipe: close the settings rail if it's open, otherwise tuck
+      // the keyboard away. Horizontal so it works in editable too.
       if (dx > 70 && Math.abs(dy) < 45) {
         swipeStart = null;
         if (document.body.classList.contains('settings-open')) settingsEl.hidden = true;
         else dropKeyboard();
         return;
       }
-      // swipe down also dismisses on the locked page (in editable the textarea scrolls)
-      if (!editActive() && dy > 70 && Math.abs(dx) < 50) { swipeStart = null; dropKeyboard(); }
+      // swipe down dismisses the keyboard: a gentle pull on the locked page, or a
+      // long deliberate pull in editable (where short swipes scroll the textarea).
+      if (dy > 70 && Math.abs(dx) < 50 && (!editActive() || dy > 130)) { swipeStart = null; dropKeyboard(); return; }
+      // swipe up: keyboard up → kept sheets; keyboard away → bring it back. A clear
+      // upward flick (~90px) anywhere on the page, so you never have to find the handle.
+      if (dy < -90 && Math.abs(dx) < 50) {
+        swipeStart = null;
+        if (document.body.classList.contains('kb-up')) Kept.open();
+        else if (editActive()) editSurface.focus(); else focusActiveEnd();
+        return;
+      }
     }, { passive: true });
 
     // swipe IN from the right edge → slide out the settings rail (the way I keep

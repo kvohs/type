@@ -63,14 +63,16 @@ struct TypeWebView: UIViewRepresentable {
         config.userContentController.addUserScript(WKUserScript(source: bridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController.add(context.coordinator, name: "type")
 
-        AccessoryHidingWebView.allowKeyboardWithoutUserAction()   // the page can raise the keyboard on its own — we're here to write
-        let webView = AccessoryHidingWebView(frame: .zero, configuration: config)
+        OverlayWebView.allowKeyboardWithoutUserAction()   // the page can raise the keyboard on its own — we're here to write
+        let webView = OverlayWebView(frame: .zero, configuration: config)
         context.coordinator.webView = webView
         webView.isOpaque = false
         webView.backgroundColor = .white
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.bounces = false
+        webView.scrollView.showsVerticalScrollIndicator = false
+        webView.scrollView.showsHorizontalScrollIndicator = false
         webView.allowsBackForwardNavigationGestures = false
         webView.allowsLinkPreview = false
         webView.navigationDelegate = context.coordinator
@@ -335,11 +337,10 @@ struct TypeWebView: UIViewRepresentable {
     }
 }
 
-// WKWebView shows a shortcut bar above the keyboard for focused form fields.
-// On a sheet of paper that bar is chrome, and the app's whole thesis is no
-// chrome. Overriding inputAccessoryView on the content view's dynamic
-// subclass (a public UIResponder property) removes it.
-final class AccessoryHidingWebView: WKWebView {
+// A full-screen WKWebView that lets the keyboard OVERLAY its content (the page
+// flows behind the keyboard) instead of avoiding it. Also hosts shake-to-feedback
+// and the patch that lets the page raise the keyboard on its own.
+final class OverlayWebView: WKWebView {
     // shake → snapshot the page as it looks right now, then the feedback
     // sheet opens with the shot riding along. Motion events ride the
     // responder chain up from the focused content view, so the webview
@@ -387,8 +388,6 @@ final class AccessoryHidingWebView: WKWebView {
         }
     }
 
-    private static var swappedClassesByContent: [String: AnyClass] = [:]
-
     // iOS normally refuses to show the keyboard for a programmatic focus() — it
     // requires a user tap. We're a writing app: the page focuses the live line as
     // soon as writing is possible and the keyboard should come up with it. Patch
@@ -412,52 +411,67 @@ final class AccessoryHidingWebView: WKWebView {
 
     override init(frame: CGRect, configuration: WKWebViewConfiguration) {
         super.init(frame: frame, configuration: configuration)
-        // Replace the system shortcut bar (‹ ∨ ✓) with our own KEEP · kept · BURN
-        // toolbar welded to the keyboard. NOTE: overriding the content view's
-        // inputAccessoryView is the same lever that, when it returned nil to
-        // *hide* the bar, broke text insertion on iOS 26. Returning a real
-        // toolbar is a different case and is being trialled — if typing
-        // misbehaves on device, delete installAccessory()/swapAccessory().
-        NotificationCenter.default.addObserver(self, selector: #selector(swapAccessory),
+        enableKeyboardOverlay()
+        NotificationCenter.default.addObserver(self, selector: #selector(applyHideFormBar),
                                                name: UIResponder.keyboardWillShowNotification, object: nil)
-        installAccessory()
+        hideFormBar()
         startShakeDetection()
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    // A real, zero-height accessory: returning a non-nil view suppresses iOS's
-    // ‹ ∨ ✓ shortcut bar WITHOUT the input-break that returning nil caused on
-    // iOS 26. KEEP · ▬ · BURN live in the web bar docked just above the keyboard.
-    private lazy var hiddenAccessory: UIView = {
-        let v = UIView(frame: .zero)
-        v.autoresizingMask = [.flexibleWidth]
-        return v
-    }()
-
-    private func installAccessory(retries: Int = 8) {
+    // Hide the WebKit form-assistant bar (‹ ∨ ✓) so only our glass pill shows above
+    // the keyboard (Notes/Mail/Bear). Empty the assistant-item groups AND return nil
+    // for inputAccessoryView — nil means no view at all, so nothing for the Liquid
+    // Glass keyboard to warp around. If typing ever breaks, the nil getter is the
+    // one thing to revert.
+    private static var noBarClassByName: [String: AnyClass] = [:]
+    private func hideFormBar(retries: Int = 8) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if !self.swapAccessory(), retries > 0 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.installAccessory(retries: retries - 1) }
+            if !self.applyHideFormBar(), retries > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.hideFormBar(retries: retries - 1) }
             }
         }
     }
 
     @discardableResult
-    @objc private func swapAccessory() -> Bool {
-        guard let contentView = scrollView.subviews.first(where: { String(describing: type(of: $0)).hasPrefix("WKContent") }) else { return false }
-        let baseName = String(describing: type(of: contentView))
-        if String(describing: type(of: contentView)).hasSuffix("_TypeAccessory") { return true }   // already swapped
-        let v = hiddenAccessory
-        if let cached = Self.swappedClassesByContent[baseName] { object_setClass(contentView, cached); return true }
-        guard let baseClass = object_getClass(contentView),
-              let newClass = objc_allocateClassPair(baseClass, baseName + "_TypeAccessory", 0) else { return false }
-        let getter: @convention(block) (AnyObject) -> UIView? = { _ in v }
+    @objc private func applyHideFormBar() -> Bool {
+        guard let cv = scrollView.subviews.first(where: { String(describing: type(of: $0)).hasPrefix("WKContent") }) else { return false }
+        cv.inputAssistantItem.leadingBarButtonGroups = []
+        cv.inputAssistantItem.trailingBarButtonGroups = []
+        let name = String(describing: type(of: cv))
+        if name.hasSuffix("_NoFormBar") { return true }                 // already swapped
+        if let cached = Self.noBarClassByName[name] { object_setClass(cv, cached); return true }
+        guard let base = object_getClass(cv),
+              let newClass = objc_allocateClassPair(base, name + "_NoFormBar", 0) else { return false }
+        let getter: @convention(block) (AnyObject) -> UIView? = { _ in nil }
         class_addMethod(newClass, #selector(getter: UIResponder.inputAccessoryView), imp_implementationWithBlock(getter), "@@:")
         objc_registerClassPair(newClass)
-        Self.swappedClassesByContent[baseName] = newClass
-        object_setClass(contentView, newClass)
+        Self.noBarClassByName[name] = newClass
+        object_setClass(cv, newClass)
         return true
+    }
+
+    // Keyboard OVERLAY, not avoidance. WKWebView writes scrollView.contentInset.bottom
+    // when the keyboard opens — that inset pushes the page up and leaves the opaque
+    // seam under the keys. Force it back to zero so the web content stays full
+    // screen height and simply flows behind the (translucent) keyboard, exactly
+    // like Bear. The page's own floating glass bar handles "above the keyboard."
+    // No inputAccessoryView, no native keyboard handling — that was the whole trap.
+    private var insetObservation: NSKeyValueObservation?
+    private func enableKeyboardOverlay() {
+        scrollView.contentInsetAdjustmentBehavior = .never
+        insetObservation = scrollView.observe(\.contentInset, options: [.new]) { [weak self] sv, _ in
+            guard let self else { return }
+            if sv.contentInset.bottom != 0 {
+                var inset = sv.contentInset
+                inset.bottom = 0
+                sv.contentInset = inset
+                sv.scrollIndicatorInsets = inset
+                self.insetObservation?.invalidate()   // avoid recursion when we set it back
+                self.enableKeyboardOverlay()           // re-arm the observer
+            }
+        }
     }
 }

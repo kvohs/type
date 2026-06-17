@@ -6,6 +6,17 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.11.0
+
+### Changed
+- **Even spacing, top to bottom.** The line you're writing now breathes exactly like every line above it. No more tightening on the current line, and no little jump when you press Return — your spacing choice (tight / normal / loose / wide) applies to the whole sheet, uniformly. The cursor stays small, sized to the letters rather than the spacing, at every setting. (Under the hood: type now paints its own cursor, the way a native editor does, instead of taking the browser's — which is glued to the line height.)
+
+### Fixed
+- **The editable page opens every time.** With the editable page turned on, skipping the opening animation could leave you on a locked sheet you couldn't change. Now editable is editable no matter how you get to the page.
+- **The editable page keeps your cursor where you're writing.** On Mac the writing line now rests at the middle of the page — the same height as the typewriter page — and the text scrolls up beneath it as you go, instead of drifting down toward the bottom.
+
+---
+
 ## v1.10.0
 
 ### New

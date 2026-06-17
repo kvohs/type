@@ -171,12 +171,11 @@
     overflow-wrap: normal;
     word-break: normal;
   }
-  /* the LIVE line is the only one with a caret, so it keeps a tight line box →
-     the native caret stays small even when the page is airy. (Editable mode is
-     one flowing region, so it uses the full spacing and draws its own small
-     caret instead.) */
-  .line.active-line { line-height: var(--leading); min-height: calc(var(--type-size) * var(--leading)); }
-  body.editing .line.active-line { line-height: var(--space); min-height: calc(var(--type-size) * var(--space)); }
+  /* the LIVE line uses the FULL line spacing too, so the whole sheet shares one
+     uniform rhythm — the line you're typing breathes exactly like the ones above
+     it. The native caret would grow to that airy line box, so we hide it and paint
+     our own small caret (sized to the letters) instead — see #editCaret below. */
+  .line.active-line { line-height: var(--space); min-height: calc(var(--type-size) * var(--space)); }
   /* editable mode surface: a real native <textarea>, OUTSIDE the masked/transformed
      platen, so caret / selection / copy-paste / scrolling are all native and stop
      fighting iOS. plain monospace text at the airy --space rhythm; the platen above
@@ -200,6 +199,16 @@
        keyboard state. */
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 114px, #000 158px);
             mask-image: linear-gradient(to bottom, transparent 0, transparent 114px, #000 158px);
+  }
+  /* Desktop editable: park the writing line on the SAME strike line the locked page
+     uses (50% - 1.02em), the same passive-CSS way iOS parks above the keyboard — NO
+     JavaScript. scroll-padding-bottom pins the caret to that line as you type forward
+     (Blink honors scroll-padding in its caret-reveal); padding-bottom is the matching
+     scroll-room so the line can scroll up to it. (Desktop has no keyboard to fight.) */
+  body:not(.ios) .edit-surface {
+    padding-top:           calc(var(--vvh, 100vh) * 0.5 - 1.02em);
+    padding-bottom:        calc(var(--vvh, 100vh) * 0.5 + 1.02em);
+    scroll-padding-bottom: calc(var(--vvh, 100vh) * 0.5 + 1.02em);
   }
   /* a clear, theme-aware selection highlight — the OS default washed out on the
      dark themes. accent-tinted over the paper so it reads on light, dark, amber,
@@ -280,11 +289,11 @@
   @keyframes blink { 0%,49% { opacity: .9; } 50%,100% { opacity: 0; } }
   .stage.typing .caret { animation: none; opacity: .9; }
 
-  /* editable page: the native caret grows with the (airy) line-height, which
-     looks oversized. Hide it there and paint our own small bar instead — sized
-     to the type, not the line spacing. Locked mode keeps the native caret (it's
-     already small via the tight line box). */
-  body.editing .line.active-line { caret-color: transparent; }
+  /* the native caret grows to the (airy) line-height, which looks oversized at
+     loose/wide spacing. So everywhere we own the active line, we hide the native
+     caret and paint our own small bar instead — sized to the letters, not the
+     spacing. This is what lets the whole sheet use full spacing AND keep a small
+     caret (the thing a browser otherwise won't let you separate). */
   #editCaret {
     position: absolute; display: none; width: 2px; border-radius: 1px;
     background: var(--ink); pointer-events: none; z-index: 6; will-change: top, left;
@@ -297,7 +306,7 @@
      the user types; we only read its text into `current`. */
   .line.active-line {
     outline: none; border: 0; background: none;
-    caret-color: var(--ink); color: var(--ink);
+    caret-color: transparent; color: var(--ink);   /* native caret hidden — #editCaret is painted in its place */
     -webkit-user-modify: read-write-plaintext-only;
   }
 
@@ -2602,6 +2611,10 @@
   function enterWriting(doFocus) {
     renderActive();
     layout();
+    // editable mode is a native textarea that owns its own focus/caret/scroll. Open
+    // it here so EVERY way into writing reaches it — notably skipping the intro,
+    // which otherwise left you on the locked platen with nothing editable.
+    if (editableNow()) { syncEditableSurface(); return; }
     if (doFocus !== false) focusActiveEnd();   // keyboard up on iOS too (native shell allows programmatic focus)
   }
 
@@ -2651,7 +2664,9 @@
     // your finger. Only re-center when the caret has strayed off-screen (e.g. an
     // arrow key walked it past the edge); a tap that lands in view stays put.
     document.addEventListener('selectionchange', () => {
-      if (!settings.editable || document.activeElement !== el || phase !== 'writing') return;
+      if (document.activeElement !== el || phase !== 'writing') return;
+      positionEditCaret();                         // keep the painted caret on the text — both modes
+      if (!settings.editable) return;              // the pull-into-view below is editable-page only
       const sel = window.getSelection();
       if (!sel || !sel.isCollapsed || !sel.rangeCount) return;
       const r = sel.getRangeAt(0).getBoundingClientRect();
@@ -2659,7 +2674,6 @@
       const vv = window.visualViewport;
       const vTop = vv ? vv.offsetTop : 0, vH = vv ? vv.height : window.innerHeight;
       if (r.top < vTop + vH * 0.12 || r.bottom > vTop + vH * 0.80) layout();   // pull into view only when it strays
-      positionEditCaret();
     });
   }
 
@@ -2758,13 +2772,15 @@
     return Math.max(0, activeEl.offsetHeight - oneRow);
   }
 
-  // editable page only: paint a small caret (the native one tracks the airy
-  // line-height and looks oversized). Lives inside #feed so it rolls with the
-  // platen; sized to the type, centered in the line box.
+  // Paint our own small caret on the active line (the native one tracks the airy
+  // line-height and looks oversized at loose/wide). Used in BOTH locked and editable
+  // page modes — it's what lets the active line share the full spacing yet keep a
+  // small caret. Lives inside #feed so it rolls with the platen; sized to the type,
+  // centered in the line box.
   let editCaret = null;
   function positionEditCaret() {
     if (editActive()) { if (editCaret) editCaret.style.display = 'none'; return; }   // native textarea draws its own caret
-    if (!settings.editable) { if (editCaret) editCaret.style.display = 'none'; return; }
+    if (phase !== 'writing' || cursor) { if (editCaret) editCaret.style.display = 'none'; return; }  // not while overstriking or off the writing line
     if (!editCaret) { editCaret = document.createElement('div'); editCaret.id = 'editCaret'; feed.appendChild(editCaret); }
     const sel = window.getSelection();
     if (document.activeElement !== activeEl || !sel || !sel.rangeCount || !sel.isCollapsed) { editCaret.style.display = 'none'; return; }
@@ -2772,9 +2788,19 @@
     if (!activeEl || !activeEl.contains(r.startContainer)) { editCaret.style.display = 'none'; return; }
     const fs = parseFloat(getComputedStyle(activeEl).fontSize) || 18;
     let rect = r.getBoundingClientRect();
-    if (!rect || !rect.height) {                 // empty line — sit at the line's start
-      const ar = activeEl.getBoundingClientRect();
-      rect = { left: ar.left, top: ar.top, height: fs * (settings.lineSpace || 1.5) };
+    if (!rect || !rect.height) {
+      // a collapsed caret range can report a zero-height rect. If there's text,
+      // measure the rendered content's trailing edge (locked mode types at the end)
+      // rather than dropping the caret to the line start.
+      if (activeEl.textContent && activeEl.textContent.replace(/​/g, '').length) {
+        const rr = document.createRange(); rr.selectNodeContents(activeEl);
+        const rects = rr.getClientRects(); const last = rects[rects.length - 1];
+        if (last && last.height) rect = { left: last.right, top: last.top, height: last.height };
+      }
+      if (!rect || !rect.height) {               // truly empty line — sit at the line's start
+        const ar = activeEl.getBoundingClientRect();
+        rect = { left: ar.left, top: ar.top, height: fs * (settings.lineSpace || 1.5) };
+      }
     }
     const fr = feed.getBoundingClientRect();
     const h = Math.round(fs * 1.15);

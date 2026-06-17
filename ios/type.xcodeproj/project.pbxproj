@@ -15,6 +15,7 @@
 		75F46637E2BAA473CEFAEE64 /* Shell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4717A420AB2CDA71A5A666C /* Shell.swift */; };
 		7CDD219A46CA521716BE80E0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6C8DCB1AEB88028382274487 /* Assets.xcassets */; };
 		99353D825A136D9B05680954 /* web in Resources */ = {isa = PBXBuildFile; fileRef = 6D8A3CE0D160340131FFB475 /* web */; };
+		B7BDC1393C7B26B809278569 /* native.html in Resources */ = {isa = PBXBuildFile; fileRef = C5A1FAF0A4E82EC3A20EA32B /* native.html */; };
 		BF5C69B0A2D9D17D94869471 /* CourierPrime-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BC3B1FF8A9537CAE10160072 /* CourierPrime-Regular.ttf */; };
 /* End PBXBuildFile section */
 
@@ -30,6 +31,7 @@
 		B329882117FC6F2CC404DEE5 /* CourierPrime-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "CourierPrime-Bold.ttf"; sourceTree = "<group>"; };
 		BC3B1FF8A9537CAE10160072 /* CourierPrime-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "CourierPrime-Regular.ttf"; sourceTree = "<group>"; };
 		C040290AED726221326574C9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		C5A1FAF0A4E82EC3A20EA32B /* native.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = native.html; sourceTree = "<group>"; };
 		CC7FC6DBFFBCFF3A38A06B0D /* TypeWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeWebView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -79,6 +81,7 @@
 		E5952B2A329965953B1F03D8 /* web */ = {
 			isa = PBXGroup;
 			children = (
+				C5A1FAF0A4E82EC3A20EA32B /* native.html */,
 				E52DB2DFB6CA894F730A8084 /* fonts */,
 			);
 			path = web;
@@ -149,6 +152,7 @@
 				5C836D5E9C823E3E1157B67F /* CourierPrime-Bold.ttf in Resources */,
 				2AB6AB33E33EDD78960D5110 /* CourierPrime-Italic.ttf in Resources */,
 				BF5C69B0A2D9D17D94869471 /* CourierPrime-Regular.ttf in Resources */,
+				B7BDC1393C7B26B809278569 /* native.html in Resources */,
 				99353D825A136D9B05680954 /* web in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -173,7 +177,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# the iOS app ships the same single-file app the desktop wraps —\n# copied fresh from the repo root on every build, never edited here\ncp \"$SRCROOT/../index.html\" \"$SRCROOT/type/web/index.html\"\ncp \"$SRCROOT/../quotes.js\"  \"$SRCROOT/type/web/quotes.js\"\n# native-text spike (this branch only): the hardened contenteditable surface\ncp \"$SRCROOT/../prototype/native.html\" \"$SRCROOT/type/web/native.html\"\n";
+			shellScript = "# the iOS app ships the same single-file app the desktop wraps —\n# copied fresh from the repo root on every build, never edited here\ncp \"$SRCROOT/../index.html\" \"$SRCROOT/type/web/index.html\"\ncp \"$SRCROOT/../quotes.js\"  \"$SRCROOT/type/web/quotes.js\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -244,7 +248,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = CAKM5U4VR2;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -264,7 +268,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.9.0;
+				MARKETING_VERSION = 1.11.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -328,7 +332,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = CAKM5U4VR2;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -342,7 +346,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.9.0;
+				MARKETING_VERSION = 1.11.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

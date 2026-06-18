@@ -5,9 +5,15 @@ const { contextBridge, ipcRenderer } = require('electron');
 const versionArg = (process.argv || []).find((a) => a.startsWith('--type-version='));
 const TYPE_VERSION = versionArg ? versionArg.split('=')[1] : '';
 
+// debug = not a packaged build (dev `electron .` run). Mirrors the iOS bridge's
+// `debug` flag so the renderer's usage signal can stay silent in dev.
+const debugArg = (process.argv || []).find((a) => a.startsWith('--type-debug='));
+const TYPE_DEBUG = debugArg ? debugArg.split('=')[1] === '1' : true;
+
 // Minimal, safe bridge for the renderer. Only these calls cross into Node.
 contextBridge.exposeInMainWorld('typeAPI', {
   isDesktop: true,
+  debug: TYPE_DEBUG,
   version: TYPE_VERSION,
   pickFolder: () => ipcRenderer.invoke('type:pick-folder'),
   defaultSaveDir: () => ipcRenderer.invoke('type:default-save-dir'),   // { dir, icloud, label } for the settings folder label

@@ -1312,6 +1312,7 @@
       <button type="button" class="setgroup-head" aria-expanded="false">Saving<span class="chev"></span></button>
       <div class="setgroup-body">
         <label class="setrow" id="rowICloud" hidden><span>iCloud sync <span class="info" tabindex="0">i<span class="tip">Your writing syncs across your own devices through iCloud, and since type has no server, we never see your pages. Turn sync off to save somewhere else for now; turn it back on to return to your type folder.</span></span></span><input type="checkbox" id="setICloud" /><span class="sw"></span></label>
+        <label class="setrow" id="rowUsage"><span>Anonymous usage <span class="info" tabindex="0">i<span class="tip">Counts only that type was used (a page written, kept, burned, shared, or browsed), so we know people are writing. No account, no name, and never a word of what you write. Turn it off and type sends nothing.</span></span></span><input type="checkbox" id="setUsage" /><span class="sw"></span></label>
         <div class="setrow setrow-btn" id="rowSaveFolder" hidden>
           <span class="setval" id="saveFolderLabel">Downloads</span>
           <span class="setpick">choose…</span>
@@ -1469,16 +1470,58 @@
   })();
 
   /* ================= SETTINGS ================= */
-  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, haptics: true, autocorrect: false, quoteOpen: true, quoteBurn: true, saveDir: '', lineSpace: 1.5, onboarded: false, groupsOpen: {} };
+  const DEFAULTS = { dark: false, amber: false, dispatch: false, zen: false, onTop: false, editable: false, smolder: true, smolderSecs: 10, wordCount: false, pages: false, timer: false, sound: true, clicks: false, carriage: false, bell: false, haptics: true, autocorrect: false, quoteOpen: true, quoteBurn: true, saveDir: '', lineSpace: 1.5, onboarded: false, telemetry: true, groupsOpen: {} };
   let settings = Object.assign({}, DEFAULTS);
   try { Object.assign(settings, JSON.parse(localStorage.getItem('type.settings') || '{}')); } catch (e) {}
   settings.sound = true;   // no in-app master mute — the three sound toggles gate themselves; the OS handles silence
   const saveSettings = () => { try { localStorage.setItem('type.settings', JSON.stringify(settings)); } catch (e) {} };
+
+  // Activity — usage signal so we can tell if people actually use type, never
+  // what they write. Records THAT a verb happened (write, keep, burn, share,
+  // browse). type has no accounts, so the subject is a random per-install id,
+  // not tied to identity or any page. Off in dev (typeAPI.debug) and when the
+  // user turns it off in settings. Deduped per verb per local day. Posts to the
+  // shared Supabase usage_event log with the public anon key.
+  const Activity = (() => {
+    const SUPABASE_URL = 'https://jrxwlskrlsmprxgrbxaf.supabase.co';
+    const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyeHdsc2tybHNtcHJ4Z3JieGFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjMxNzAsImV4cCI6MjA5NTM5OTE3MH0.Kp1gjrUYEMJqBXKdpCWf4TZm57WjUrFikJAb23B0ylQ';
+    const T = (typeof window !== 'undefined' && window.typeAPI) || {};
+    const platform = T.isIOS ? 'ios' : 'mac';
+    const sent = new Set();
+    let install = null;
+    function installId() {
+      if (install) return install;
+      try {
+        install = localStorage.getItem('type.install');
+        if (!install) { install = crypto.randomUUID(); localStorage.setItem('type.install', install); }
+      } catch (e) { install = null; }
+      return install;
+    }
+    return {
+      record(action) {
+        try {
+          if (T.debug) return;                         // dev build: never count
+          if (settings.telemetry === false) return;    // user opted out
+          if (typeof fetch !== 'function') return;
+          const id = installId();
+          if (!id) return;
+          const key = `${action}|${new Date().toDateString()}`;
+          if (sent.has(key)) return;
+          sent.add(key);
+          fetch(`${SUPABASE_URL}/rest/v1/rpc/record_event`, {
+            method: 'POST',
+            headers: { 'apikey': ANON, 'Authorization': `Bearer ${ANON}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ p_app: 'type', p_platform: platform, p_action: String(action), p_install: id }),
+          }).catch(() => {});
+        } catch (e) { /* never throw from telemetry */ }
+      },
+    };
+  })();
   const THEMES = ['dark', 'amber', 'dispatch'];
   const applyTheme = () => {
     THEMES.forEach(t => document.body.classList.toggle(t, !!settings[t]));
   };
-  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), editable: document.getElementById('setEditable'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), haptics: document.getElementById('setHaptics'), autocorrect: document.getElementById('setAutocorrect'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn') };
+  const boxes = { zen: document.getElementById('setZen'), onTop: document.getElementById('setOnTop'), editable: document.getElementById('setEditable'), smolder: document.getElementById('setSmolder'), wordCount: document.getElementById('setWordCount'), pages: document.getElementById('setPages'), timer: document.getElementById('setTimer'), clicks: document.getElementById('setClicks'), carriage: document.getElementById('setCarriage'), bell: document.getElementById('setBell'), haptics: document.getElementById('setHaptics'), autocorrect: document.getElementById('setAutocorrect'), quoteOpen: document.getElementById('setQuoteOpen'), quoteBurn: document.getElementById('setQuoteBurn'), telemetry: document.getElementById('setUsage') };
   Object.keys(boxes).forEach(k => {
     boxes[k].checked = !!settings[k];
     boxes[k].addEventListener('change', () => {
@@ -2811,6 +2854,7 @@
   }
 
   function commitLine() {
+    Activity.record('write');
     // pull the latest text straight off the live native line
     if (activeEl) current = activeEl.innerText.replace(/​/g, '').replace(/\n+$/, '');
     // freeze it into a static span-rendered line ABOVE the (persistent) active
@@ -2908,6 +2952,7 @@
     if (editActive()) exitEditableToPlaten();  // native surface → platen, so the eject animation has lines to lift
     else if (activeEl) current = activeEl.innerText.replace(/​/g, '').replace(/\n+$/, '');  // sync the live line
     if (!hasContent()) return;                 // nothing written — don't keep a blank page
+    Activity.record('keep');
     // iPhone, first keep, no folder chosen yet: ask where pages should live,
     // then keep. Cancelling still keeps — to the iCloud Drive default — and
     // the question comes back on the next keep until a folder is picked.
@@ -3184,6 +3229,7 @@
 
   function burn() {
     if (frozen || phase !== 'writing') return;
+    Activity.record('burn');
     frozen = true;
     document.body.classList.remove('has-prose');   // hide the share glyph as the page burns
     coolSmolder();
@@ -3513,6 +3559,7 @@
 
   async function shareCurrentQuote() {
     if (!activeQuote) return;
+    Activity.record('share');
     try {
       const dataUrl = await renderQuoteWallpaper(activeQuote);
       if (window.typeAPI && typeof window.typeAPI.shareImage === 'function') {
@@ -3604,6 +3651,7 @@
     if (editActive()) syncFromEditable();   // pull the latest note text out of the native surface
     const prose = [...locked.slice(userFloor), current].join('\n').replace(/\s+$/, '');
     if (!prose) return;
+    Activity.record('share');
     if (typeHaptic) typeHaptic('key');
     try {
       const dataUrl = await renderProseSheet(prose);
@@ -4519,6 +4567,7 @@
     async function open() {
       if (document.body.classList.contains('reviewing')) return;
       if (typeof frozen !== 'undefined' && frozen) return;
+      Activity.record('browse');
       if (activeEl) activeEl.blur();        // drop the keyboard as the drawer lifts
       if (typeof editSurface !== 'undefined' && editSurface) editSurface.blur();   // editable mode: drop it too
       await loadArchive();

@@ -55,7 +55,11 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      additionalArguments: [`--type-version=${APP_VERSION}`],
+      additionalArguments: [
+        `--type-version=${APP_VERSION}`,
+        // So the renderer's usage signal stays silent in dev (electron .).
+        `--type-debug=${app.isPackaged ? '0' : '1'}`,
+      ],
     },
   });
 

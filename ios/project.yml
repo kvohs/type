@@ -9,7 +9,7 @@ settings:
     DEVELOPMENT_TEAM: CAKM5U4VR2
     SWIFT_VERSION: "5.9"
     MARKETING_VERSION: 1.11.0
-    CURRENT_PROJECT_VERSION: 6
+    CURRENT_PROJECT_VERSION: 7
 targets:
   type:
     type: application

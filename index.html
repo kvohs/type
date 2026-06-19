@@ -4583,9 +4583,12 @@
       cancelAnimationFrame(raf); raf = null;
       const o = keptScreen.querySelector('.opened'); if (o) o.remove();
       if (!searchBox.hidden) closeSearch();
-      // back to the canvas → bring the keyboard back up (the dream: the picker
-      // drops it, returning restores it). iOS only; the focus swizzle allows it.
-      if (isIOS && phase === 'writing' && !frozen && !feedbackMode) {
+      // back to the canvas → put the caret back on the line so you can just type.
+      // On iOS this also brings the keyboard up (the dream: the picker drops it,
+      // returning restores it; the focus swizzle allows it). On desktop there's no
+      // keyboard, but without this the caret stops blinking and you'd have to click
+      // to type again — so restore focus there too.
+      if (phase === 'writing' && !frozen && !feedbackMode) {
         setTimeout(() => {
           if (document.body.classList.contains('reviewing')) return;   // reopened in the meantime
           if (typeof editActive === 'function' && editActive()) editSurface.focus();

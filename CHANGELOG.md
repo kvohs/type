@@ -6,6 +6,13 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.11.1
+
+### Fixed
+- **Back from kept, ready to type.** Pressing Esc to leave the kept browser now drops you back on the page with the cursor already blinking — just start writing, no click needed first.
+
+---
+
 ## v1.11.0
 
 ### Changed

@@ -6,6 +6,13 @@ auto-updater and kellyvohs.com/type both read from.
 
 ---
 
+## v1.11.2
+
+### Fixed
+- **⌘⌫ clears to the start of the line.** Holding Command and pressing Delete now works the way it does everywhere else on the Mac — it removes everything from the cursor back to the beginning of the line and leaves anything to the right of the cursor alone. Before, it wiped the whole line no matter where the cursor sat; on the editable page it did nothing at all.
+
+---
+
 ## v1.11.1
 
 ### Fixed

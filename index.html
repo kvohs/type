@@ -3801,13 +3801,22 @@
       burn();
       return;
     }
+    // ⌘⌫ / ⌃⌫ — delete to the start of the line, the macOS way. The writing
+    // surfaces are native (the contenteditable live line and the editable-page
+    // textarea) and own their caret + undo, so we DON'T intercept: let the OS run
+    // its standard "delete to beginning of line" and the surface's own input
+    // listener syncs `current` and persists. (⌥⌫ word-delete already passes
+    // through this same way.) Only step in to make sure the caret is actually in
+    // the writing surface first — and if it already is, leave it where the user
+    // put it so the delete runs from there, not from a forced end-of-line.
     if (mod && (e.key === 'Backspace' || e.key === 'Delete')) {
-      e.preventDefault();
-      if (frozen || phase !== 'writing') return;
-      // ⌘⌫ wipes the current (still-uncommitted) line — committed lines stay locked
-      if (current.length > 0) { current = ''; if (activeEl) activeEl.textContent = ''; thock(); }
-      markTyping(); nudgeHints(); resetSmolder(); persistDraft(); updateMeter();
-      return;
+      if (frozen || phase !== 'writing') { e.preventDefault(); return; }
+      const surface = editActive() ? editSurface : activeEl;
+      if (surface && document.activeElement !== surface) {
+        if (editActive()) { try { editSurface.focus({ preventScroll: true }); } catch (_) {} }
+        else focusActiveEnd();
+      }
+      return;                          // no preventDefault → native delete-to-line-start runs
     }
     if (frozen) return;
     if (mod) return;                       // any other ⌘/⌃ combo isn't ours — let it pass
